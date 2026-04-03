@@ -4,7 +4,7 @@ import boto3
 from botocore.config import Config
 from dotenv import load_dotenv
 
-s3_donfig = Config(retries={"max_attempts": 10, "mode": "standard"})
+s3_config = Config(retries={"max_attempts": 10, "mode": "standard"})
 
 load_dotenv()
 

@@ -1,3 +1,4 @@
+import json
 import os
 import pickle
 from contextlib import asynccontextmanager
@@ -63,13 +64,11 @@ def request_key_builder(
 class ORMJsonCoder(Coder):
     @classmethod
     def encode(cls, value: Any) -> bytes:
-        return pickle.dumps(
-            value,
-        )
+        return json.dumps(value, default=str).encode()
 
     @classmethod
     def decode(cls, value: bytes) -> Any:
-        return pickle.loads(value)
+        return json.loads(value)
 
 
 @asynccontextmanager

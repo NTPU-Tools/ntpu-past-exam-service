@@ -3,21 +3,29 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import Request
-from jose import jwt
+from fastapi import HTTPException, Request
+from jose import JWTError, jwt
 
 load_dotenv()
 
 
 SECRET_KEY = os.getenv("HASH_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("HASH_KEY environment variable is not set or empty")
 ALGORITHM = "HS256"
 
 
-def get_access_token_payload(request: Request, options=None):
-    token = request.headers.get("authorization") or " "
-    payload = jwt.decode(
-        token.split(" ")[1], SECRET_KEY, algorithms=[ALGORITHM], options=options
-    )
+def get_access_token_payload(request: Request, options=None, token_type: str = "access"):
+    auth_header = request.headers.get("authorization") or ""
+    parts = auth_header.split(" ")
+    if len(parts) != 2 or parts[0] != "Bearer":
+        raise HTTPException(status_code=401, detail="Invalid or missing authorization header")
+    try:
+        payload = jwt.decode(parts[1], SECRET_KEY, algorithms=[ALGORITHM], options=options)
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if token_type is not None and payload.get("type") != token_type:
+        raise HTTPException(status_code=401, detail="Invalid token type")
     return payload
 
 
