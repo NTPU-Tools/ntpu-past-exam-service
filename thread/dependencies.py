@@ -16,7 +16,7 @@ from . import models
 load_dotenv()
 
 
-def _serialize_thread(thread: models.Thread, user: User, liked: Optional[bool] = None):
+def _serialize_thread(thread: models.Thread, user: User, liked: Optional[bool] = None, current_user_id: Optional[str] = None):
     data = {
         "id": thread.id,
         "title": thread.title,
@@ -33,6 +33,7 @@ def _serialize_thread(thread: models.Thread, user: User, liked: Optional[bool] =
             if thread.is_anonymous
             else (user.readable_name if user.readable_name else user.username)
         ),
+        "is_owner": (current_user_id == thread.owner_id) if current_user_id else False,
     }
     if liked is not None:
         data["liked"] = liked
@@ -44,6 +45,7 @@ def _serialize_comment(
     user: User,
     liked: Optional[bool] = None,
     reply_count: Optional[int] = None,
+    current_user_id: Optional[str] = None,
 ):
     data = {
         "id": comment.id,
@@ -60,6 +62,7 @@ def _serialize_comment(
             if comment.is_anonymous
             else (user.readable_name if user.readable_name else user.username)
         ),
+        "is_owner": (current_user_id == comment.owner_id) if current_user_id else False,
     }
     if liked is not None:
         data["liked"] = liked
@@ -97,7 +100,7 @@ def get_threads(
         }
 
     return [
-        _serialize_thread(thread, user, liked=thread.id in liked_thread_ids)
+        _serialize_thread(thread, user, liked=thread.id in liked_thread_ids, current_user_id=user_id)
         for thread, user in query_result
     ]
 
@@ -127,7 +130,7 @@ def get_thread(db: Session, thread_id: str, user_id: str = None):
             is not None
         )
 
-    return _serialize_thread(thread, user, liked=liked)
+    return _serialize_thread(thread, user, liked=liked, current_user_id=user_id)
 
 
 def create_thread(
@@ -258,6 +261,7 @@ def get_comments(
                 user,
                 liked=comment.id in liked_comment_ids,
                 reply_count=reply_count_map.get(comment.id, 0),
+                current_user_id=user_id,
             )
         )
     return comments
@@ -328,6 +332,7 @@ def get_comment_with_replies(db: Session, comment_id: str, user_id: str = None):
             comment_item,
             comment_user,
             liked=comment_item.id in liked_comment_ids,
+            current_user_id=user_id,
         )
         comment_data["replies"] = []
         comment_data_map[comment_item.id] = comment_data
@@ -476,7 +481,7 @@ def toggle_thread_like(db: Session, thread_id: str, user_id: str):
         db.refresh(db_thread)
 
     thread_user = db.query(User).filter(User.id == db_thread.owner_id).first()
-    return {"thread": _serialize_thread(db_thread, thread_user, liked=liked), "liked": liked}
+    return {"thread": _serialize_thread(db_thread, thread_user, liked=liked, current_user_id=user_id), "liked": liked}
 
 
 def toggle_comment_like(db: Session, comment_id: str, user_id: str):
@@ -534,4 +539,4 @@ def toggle_comment_like(db: Session, comment_id: str, user_id: str):
         db.refresh(db_comment)
 
     comment_user = db.query(User).filter(User.id == db_comment.owner_id).first()
-    return {"comment": _serialize_comment(db_comment, comment_user, liked=liked), "liked": liked}
+    return {"comment": _serialize_comment(db_comment, comment_user, liked=liked, current_user_id=user_id), "liked": liked}
