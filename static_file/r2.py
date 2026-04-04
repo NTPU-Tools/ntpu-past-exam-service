@@ -13,6 +13,7 @@ s3 = boto3.resource(
     endpoint_url=os.getenv("R2_URL"),
     aws_access_key_id=os.getenv("R2_ACCESS_KEY"),
     aws_secret_access_key=os.getenv("R2_ACCESS_TOKEN"),
+    config=s3_config,
 )
 
 r2 = boto3.client(
@@ -21,6 +22,7 @@ r2 = boto3.client(
     aws_access_key_id=os.getenv("R2_ACCESS_KEY"),
     aws_secret_access_key=os.getenv("R2_ACCESS_TOKEN"),
     region_name="auto",
+    config=s3_config,
 )
 
 

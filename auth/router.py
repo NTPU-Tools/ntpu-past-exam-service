@@ -224,7 +224,7 @@ def login(
 @cache(expire=60)
 def verify(request: Request, db: Session = Depends(get_db)):
     try:
-        payload = get_access_token_payload(request)
+        payload = get_access_token_payload(request, options={"verify_exp": False})
         user_id = payload.get("id")
 
         admin_scope = users_dependencies.get_user_department_admin_ids(db, user_id)

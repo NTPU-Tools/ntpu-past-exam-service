@@ -24,8 +24,12 @@ def get_access_token_payload(request: Request, options=None, token_type: str = "
         payload = jwt.decode(parts[1], SECRET_KEY, algorithms=[ALGORITHM], options=options)
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-    if token_type is not None and payload.get("type") != token_type:
-        raise HTTPException(status_code=401, detail="Invalid token type")
+    if token_type is not None:
+        payload_type = payload.get("type")
+        # Backward compat: tokens issued before type field was added had no "type";
+        # treat missing type as "access" during the 1-day transition window.
+        if not (token_type == "access" and payload_type is None) and payload_type != token_type:
+            raise HTTPException(status_code=401, detail="Invalid token type")
     return payload
 
 

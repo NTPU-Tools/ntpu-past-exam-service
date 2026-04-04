@@ -1,6 +1,5 @@
 import json
 import os
-import pickle
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -145,7 +144,6 @@ app.include_router(
 app.include_router(
     thread_router,
     tags=["Threads"],
-    dependencies=[Depends(auth_middleware), Depends(oauth2_scheme)],
 )
 app.include_router(auth_router, tags=["Auth"])
 
