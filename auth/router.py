@@ -57,10 +57,9 @@ async def admin_middleware(request: Request):
     department_id = request.path_params.get("department_id")
     payload = get_access_token_payload(request)
 
-    is_super_user: bool = payload.get("isu")
-    print(is_super_user)
     if payload is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    is_super_user: bool = payload.get("isu")
     admin_ids: str = payload.get("adm")
 
     if admin_ids is None:
@@ -183,6 +182,10 @@ def login(
                 user_dict,
             )
     except ValueError:
+        if not user or not user.hashed_password:
+            raise HTTPException(
+                status_code=400, detail="incorrect username or password"
+            )
         if not verify_password(form_data.password, user.hashed_password):
             raise HTTPException(
                 status_code=400, detail="incorrect username or password"
@@ -241,7 +244,7 @@ def verify(request: Request, db: Session = Depends(get_db)):
 @router.post("/refresh")
 def refresh(request: Request, db: Session = Depends(get_db)):
     try:
-        payload = get_access_token_payload(request)
+        payload = get_access_token_payload(request, token_type="refresh")
         user_id: str = payload.get("id")
         department_admin_ids = users_dependencies.get_user_department_admin_ids(
             db, user_id
@@ -299,10 +302,10 @@ def create_user(
         },
     )
 
-    access_token = create_access_token(data={"sub": user.username, "id": user.id})
+    access_token = create_access_token(data={"sub": user.username, "type": "access", "isu": False, "id": user.id, "adm": "[]"})
 
     refresh_token = create_access_token(
-        data={"sub": user.username, "type": "refresh"},
+        data={"sub": user.username, "type": "refresh", "isu": False, "id": user.id, "adm": "[]"},
         expires_delta=365,
     )
 

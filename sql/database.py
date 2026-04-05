@@ -3,8 +3,7 @@ import uuid
 
 from dotenv import load_dotenv
 from sqlalchemy import Column, DateTime, String, create_engine, func
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 load_dotenv()
 
@@ -29,7 +28,8 @@ class BaseColumn(object):  # pylint: disable=useless-object-inheritance
         server_default=func.now(),  # pylint: disable=not-callable
     )
     updated_time = Column(
-        DateTime(timezone=True), onupdate=func.now()  # pylint: disable=not-callable
+        DateTime(timezone=True),
+        onupdate=func.now(),  # pylint: disable=not-callable
     )
 
 

@@ -1,6 +1,8 @@
+import json
 import os
 import pickle
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Any
 
 from dotenv import load_dotenv
@@ -20,6 +22,7 @@ from bulletins.router import router as bulletins_router
 from courses.router import router as courses_router
 from departments.router import router as departments_router
 from posts.router import router as posts_router
+from thread.router import router as thread_router
 from sql import models
 from sql.database import engine
 from users.router import router as users_router
@@ -60,16 +63,28 @@ def request_key_builder(
     )
 
 
+def _json_default(obj: Any) -> Any:
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    return str(obj)
+
+
 class ORMJsonCoder(Coder):
     @classmethod
     def encode(cls, value: Any) -> bytes:
-        return pickle.dumps(
-            value,
-        )
+        return json.dumps(value, default=_json_default).encode()
 
     @classmethod
     def decode(cls, value: bytes) -> Any:
-        return pickle.loads(value)
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            # nosec - legacy pickle cache entries from before JSON coder migration.
+            # Remove this fallback once all pickle entries have expired (cache TTL ≤ 365 days).
+            try:
+                return pickle.loads(value)  # nosec
+            except Exception:
+                return None
 
 
 @asynccontextmanager
@@ -141,6 +156,10 @@ app.include_router(
     bulletins_router,
     tags=["Bulletins"],
     dependencies=[Depends(auth_middleware), Depends(oauth2_scheme)],
+)
+app.include_router(
+    thread_router,
+    tags=["Threads"],
 )
 app.include_router(auth_router, tags=["Auth"])
 

@@ -11,6 +11,7 @@ from courses.models import Course
 from posts.models import Post, PostFile
 from sql.database import SQLALCHEMY_DATABASE_URL
 from sql.models import Base
+from thread.models import CommentLike, Thread, ThreadComment, ThreadLike
 from users.models import User
 
 load_dotenv()

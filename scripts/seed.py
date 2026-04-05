@@ -12,14 +12,15 @@ import uuid
 # Ensure project root is in path when running as `python scripts/seed.py`
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from alembic import command
+from alembic.config import Config
 from sqlalchemy.orm import Session
 
 from bulletins.models import Bulletin
 from courses.models import Course
 from departments.models import Department
 from posts.models import Post, PostFile
-from sql.database import SessionLocal, engine
-from sql.models import Base
+from sql.database import SessionLocal
 from users.models import User, UserDepartment
 
 
@@ -32,8 +33,16 @@ def generate_uuid():
     return str(uuid.uuid4())
 
 
+def run_migrations():
+    project_root = os.path.join(os.path.dirname(__file__), "..")
+    alembic_cfg = Config(os.path.join(project_root, "alembic.ini"))
+    alembic_cfg.set_main_option("script_location", os.path.join(project_root, "alembic"))
+    command.upgrade(alembic_cfg, "head")
+    print("Migrations applied.")
+
+
 def seed():
-    Base.metadata.create_all(bind=engine)
+    run_migrations()
     db: Session = SessionLocal()
 
     # Check if already seeded
