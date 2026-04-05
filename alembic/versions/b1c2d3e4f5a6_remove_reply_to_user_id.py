@@ -9,6 +9,7 @@ Create Date: 2026-03-27 00:00:00.000000
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 from alembic import op
 
@@ -20,11 +21,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.drop_index(
-        op.f("ix_thread_comments_reply_to_user_id"),
-        table_name="thread_comments",
-    )
-    op.drop_column("thread_comments", "reply_to_user_id")
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    columns = [c["name"] for c in inspector.get_columns("thread_comments")]
+
+    if "reply_to_user_id" in columns:
+        indexes = [idx["name"] for idx in inspector.get_indexes("thread_comments")]
+        if "ix_thread_comments_reply_to_user_id" in indexes:
+            op.drop_index(
+                op.f("ix_thread_comments_reply_to_user_id"),
+                table_name="thread_comments",
+            )
+        op.drop_column("thread_comments", "reply_to_user_id")
 
 
 def downgrade() -> None:
