@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any
 
+from alembic import command
+from alembic.config import Config
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exception_handlers import http_exception_handler
@@ -23,8 +25,6 @@ from courses.router import router as courses_router
 from departments.router import router as departments_router
 from posts.router import router as posts_router
 from thread.router import router as thread_router
-from sql import models
-from sql.database import engine
 from users.router import router as users_router
 from utils.exception_handlers import (
     request_validation_exception_handler,
@@ -33,8 +33,6 @@ from utils.exception_handlers import (
 from utils.log import log_request_middleware
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
-
-models.Base.metadata.create_all(bind=engine)
 
 load_dotenv()
 
@@ -89,6 +87,9 @@ class ORMJsonCoder(Coder):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
+
     redis = aioredis.Redis(
         host=os.getenv("REDIS_HOST"),
         password=os.getenv("REDIS_PASSWORD"),
