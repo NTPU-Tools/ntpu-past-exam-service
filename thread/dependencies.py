@@ -1,7 +1,8 @@
+import logging
 import os
 import uuid
 from collections import defaultdict
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from dotenv import load_dotenv
 from sqlalchemy import func
@@ -12,6 +13,8 @@ from static_file.r2 import r2
 from users.models import User
 
 from . import models
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -24,7 +27,7 @@ def _serialize_thread(thread: models.Thread, user: User, liked: Optional[bool] =
         "image_url": thread.image_url,
         "course_id": thread.course_id,
         "is_anonymous": thread.is_anonymous,
-        "like_count": thread.like_count,
+        "like_count": thread.like_count or 0,
         "create_time": thread.create_time,
         "updated_time": thread.updated_time,
         "owner_id": "anonymous" if thread.is_anonymous else thread.owner_id,
@@ -53,7 +56,7 @@ def _serialize_comment(
         "parent_comment_id": comment.parent_comment_id,
         "content": comment.content,
         "is_anonymous": comment.is_anonymous,
-        "like_count": comment.like_count,
+        "like_count": comment.like_count or 0,
         "create_time": comment.create_time,
         "updated_time": comment.updated_time,
         "owner_id": "anonymous" if comment.is_anonymous else comment.owner_id,
@@ -73,18 +76,22 @@ def _serialize_comment(
 
 def get_threads(
     db: Session, course_id: str, skip: int = 0, limit: int = 100, user_id: str = None
-):
+) -> Tuple[list, int]:
+    base_filter = models.Thread.course_id == course_id
+    total = db.query(func.count(models.Thread.id)).filter(base_filter).scalar()
+
     query_result = (
         db.query(models.Thread, User)
-        .filter(models.Thread.course_id == course_id)
+        .filter(base_filter)
         .join(User, models.Thread.owner_id == User.id)
+        .order_by(models.Thread.create_time.desc())
         .offset(skip)
         .limit(limit)
         .all()
     )
 
     if not query_result:
-        return []
+        return [], total
 
     liked_thread_ids = set()
     if user_id:
@@ -99,10 +106,11 @@ def get_threads(
             .all()
         }
 
-    return [
+    threads = [
         _serialize_thread(thread, user, liked=thread.id in liked_thread_ids, current_user_id=user_id)
         for thread, user in query_result
     ]
+    return threads, total
 
 
 def get_thread(db: Session, thread_id: str, user_id: str = None):
@@ -188,19 +196,25 @@ def delete_thread(db: Session, db_thread: models.Thread):
         db.query(models.CommentLike).filter(
             models.CommentLike.comment_id.in_(comment_ids)
         ).delete(synchronize_session=False)
+        # Delete child comments before top-level ones to satisfy the
+        # self-referential FK on parent_comment_id.
+        db.query(models.ThreadComment).filter(
+            models.ThreadComment.thread_id == db_thread.id,
+            models.ThreadComment.parent_comment_id.isnot(None),
+        ).delete(synchronize_session=False)
+        db.query(models.ThreadComment).filter(
+            models.ThreadComment.thread_id == db_thread.id,
+        ).delete(synchronize_session=False)
 
     db.query(models.ThreadLike).filter(
         models.ThreadLike.thread_id == db_thread.id
     ).delete(synchronize_session=False)
-    db.query(models.ThreadComment).filter(
-        models.ThreadComment.thread_id == db_thread.id
-    ).delete(synchronize_session=False)
     if db_thread.image_url:
+        key = db_thread.image_url.replace(f"{os.getenv('R2_FILE_PATH')}/", "", 1)
         try:
-            key = db_thread.image_url.replace(f"{os.getenv('R2_FILE_PATH')}/", "", 1)
             r2.delete_object(Bucket=os.getenv("R2_BUCKET_NAME"), Key=key)
         except Exception:
-            pass
+            logger.warning("Failed to delete R2 object for thread %s (key=%s)", db_thread.id, key, exc_info=True)
 
     db.delete(db_thread)
     db.commit()
@@ -217,6 +231,7 @@ def get_comments(
             models.ThreadComment.parent_comment_id.is_(None),
         )
         .join(User, models.ThreadComment.owner_id == User.id)
+        .order_by(models.ThreadComment.create_time.asc())
         .offset(skip)
         .limit(limit)
         .all()
@@ -326,12 +341,15 @@ def get_comment_with_replies(db: Session, comment_id: str, user_id: str = None):
             .all()
         }
 
+    reply_count_map = {pid: len(replies) for pid, replies in replies_by_parent_id.items()}
+
     comment_data_map = {}
     for comment_item, comment_user in all_comments:
         comment_data = _serialize_comment(
             comment_item,
             comment_user,
             liked=comment_item.id in liked_comment_ids,
+            reply_count=reply_count_map.get(comment_item.id, 0),
             current_user_id=user_id,
         )
         comment_data["replies"] = []
@@ -420,8 +438,13 @@ def delete_comment(db: Session, comment_id: str):
     db.query(models.CommentLike).filter(
         models.CommentLike.comment_id.in_(comment_ids)
     ).delete(synchronize_session=False)
+    # Delete child comments before parents to satisfy the self-referential FK.
     db.query(models.ThreadComment).filter(
-        models.ThreadComment.id.in_(comment_ids)
+        models.ThreadComment.id.in_(comment_ids),
+        models.ThreadComment.parent_comment_id.isnot(None),
+    ).delete(synchronize_session=False)
+    db.query(models.ThreadComment).filter(
+        models.ThreadComment.id.in_(comment_ids),
     ).delete(synchronize_session=False)
 
     db.commit()

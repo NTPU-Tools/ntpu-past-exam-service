@@ -1,4 +1,4 @@
-from typing import Annotated, Optional
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from jose import JWTError
@@ -10,6 +10,18 @@ from users.models import User, UserDepartment
 from utils.token import get_access_token_payload
 
 from . import dependencies
+from .schemas import (
+    CommentCreateResponse,
+    CommentResponse,
+    CommentUpdateResponse,
+    DeleteResponse,
+    ThreadCreateResponse,
+    ThreadListResponse,
+    ThreadResponse,
+    ThreadUpdateResponse,
+    ToggleCommentLikeResponse,
+    ToggleThreadLikeResponse,
+)
 
 router = APIRouter(prefix="/threads")
 
@@ -48,11 +60,11 @@ def _normalize_pagination(skip: int, limit: int):
     return normalized_skip, normalized_limit
 
 
-@router.post("/{course_id}")
+@router.post("/{course_id}", response_model=ThreadCreateResponse)
 async def create_thread(
     course_id: str,
-    title: Annotated[str, Form(min_length=1, max_length=256)],
-    content: Annotated[str, Form(min_length=1, max_length=10000)],
+    title: Annotated[str, Form(min_length=1, max_length=200)],
+    content: Annotated[str, Form(min_length=1, max_length=2000)],
     is_anonymous: Annotated[bool, Form()] = False,
     image: Annotated[Optional[UploadFile], File()] = None,
     request: Request = None,
@@ -88,7 +100,7 @@ async def create_thread(
     return {"status": "success", "thread_id": thread.id}
 
 
-@router.get("/{course_id}")
+@router.get("/{course_id}", response_model=ThreadListResponse)
 def get_threads(
     course_id: str,
     skip: int = 0,
@@ -104,11 +116,11 @@ def get_threads(
         user_id = payload.get("id")
     except (JWTError, HTTPException, KeyError, AttributeError):
         pass
-    threads = dependencies.get_threads(db, course_id, skip, limit, user_id)
-    return threads
+    threads, total = dependencies.get_threads(db, course_id, skip, limit, user_id)
+    return {"threads": threads, "total": total}
 
 
-@router.get("/detail/{thread_id}")
+@router.get("/detail/{thread_id}", response_model=ThreadResponse)
 def get_thread_detail(
     thread_id: str,
     request: Request = None,
@@ -126,11 +138,11 @@ def get_thread_detail(
     return thread
 
 
-@router.put("/{thread_id}")
+@router.put("/{thread_id}", response_model=ThreadUpdateResponse)
 def update_thread(
     thread_id: str,
-    title: Annotated[Optional[str], Form(min_length=1, max_length=256)] = None,
-    content: Annotated[Optional[str], Form(min_length=1, max_length=10000)] = None,
+    title: Annotated[Optional[str], Form(min_length=1, max_length=200)] = None,
+    content: Annotated[Optional[str], Form(min_length=1, max_length=2000)] = None,
     request: Request = None,
     db: Session = Depends(get_db),
 ):
@@ -159,7 +171,7 @@ def update_thread(
     return {"status": "success", "thread_id": thread.id}
 
 
-@router.delete("/{thread_id}")
+@router.delete("/{thread_id}", response_model=DeleteResponse)
 def delete_thread(
     thread_id: str,
     request: Request = None,
@@ -206,7 +218,7 @@ def delete_thread(
     raise HTTPException(status_code=404, detail="Thread not found")
 
 
-@router.post("/{thread_id}/like")
+@router.post("/{thread_id}/like", response_model=ToggleThreadLikeResponse)
 def like_thread(
     request: Request,
     thread_id: str,
@@ -225,10 +237,10 @@ def like_thread(
     return thread
 
 
-@router.post("/{thread_id}/comments")
+@router.post("/{thread_id}/comments", response_model=CommentCreateResponse)
 def create_comment(
     thread_id: str,
-    content: Annotated[str, Form(min_length=1, max_length=10000)],
+    content: Annotated[str, Form(min_length=1, max_length=2000)],
     is_anonymous: Annotated[bool, Form()] = False,
     parent_comment_id: Annotated[Optional[str], Form()] = None,
     request: Request = None,
@@ -270,7 +282,7 @@ def create_comment(
     return {"status": "success", "comment_id": comment.id}
 
 
-@router.get("/{thread_id}/comments")
+@router.get("/{thread_id}/comments", response_model=List[CommentResponse])
 def get_comments(
     thread_id: str,
     skip: int = 0,
@@ -290,7 +302,7 @@ def get_comments(
     return comments
 
 
-@router.get("/comments/{comment_id}")
+@router.get("/comments/{comment_id}", response_model=CommentResponse)
 def get_comment_detail(
     comment_id: str,
     request: Request = None,
@@ -308,10 +320,10 @@ def get_comment_detail(
     return comment
 
 
-@router.put("/comments/{comment_id}")
+@router.put("/comments/{comment_id}", response_model=CommentUpdateResponse)
 def update_comment(
     comment_id: str,
-    content: Annotated[Optional[str], Form(min_length=1, max_length=10000)] = None,
+    content: Annotated[Optional[str], Form(min_length=1, max_length=2000)] = None,
     request: Request = None,
     db: Session = Depends(get_db),
 ):
@@ -338,7 +350,7 @@ def update_comment(
     return {"status": "success", "comment_id": comment.id}
 
 
-@router.delete("/comments/{comment_id}")
+@router.delete("/comments/{comment_id}", response_model=DeleteResponse)
 def delete_comment(
     comment_id: str,
     request: Request = None,
@@ -390,7 +402,7 @@ def delete_comment(
     raise HTTPException(status_code=404, detail="Comment not found")
 
 
-@router.post("/comments/{comment_id}/like")
+@router.post("/comments/{comment_id}/like", response_model=ToggleCommentLikeResponse)
 def comment_like(
     request: Request,
     comment_id: str,
