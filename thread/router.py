@@ -212,10 +212,8 @@ def delete_thread(
     if not can_delete:
         raise HTTPException(status_code=403, detail="Permission denied")
 
-    success = dependencies.delete_thread(db, thread)
-    if success:
-        return {"status": "success"}
-    raise HTTPException(status_code=404, detail="Thread not found")
+    dependencies.delete_thread(db, thread)
+    return {"status": "success"}
 
 
 @router.post("/{thread_id}/like", response_model=ToggleThreadLikeResponse)

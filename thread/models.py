@@ -11,6 +11,12 @@ from sqlalchemy import (
 from sql.database import Base, BaseColumn
 
 
+# NOTE: DB-level CASCADE deletes are in effect on thread_comments (via thread_id and
+# parent_comment_id FKs) and on thread_likes/comment_likes. If relationship() definitions
+# are added in the future, they MUST include passive_deletes=True to prevent SQLAlchemy
+# from issuing SET NULL before the DB CASCADE fires.
+
+
 class Thread(Base, BaseColumn):
     __tablename__ = "threads"
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_0900_ai_ci"}

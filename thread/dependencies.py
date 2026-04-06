@@ -171,7 +171,7 @@ def create_thread(
 
 
 def update_thread(db: Session, thread_id: str, update_data: Dict):
-    db_thread = db.query(models.Thread).filter(models.Thread.id == thread_id).first()
+    db_thread = db.get(models.Thread, thread_id)
     if db_thread is None:
         return None
 
@@ -185,15 +185,24 @@ def update_thread(db: Session, thread_id: str, update_data: Dict):
 
 
 def delete_thread(db: Session, db_thread: models.Thread):
+    image_key = None
     if db_thread.image_url:
-        key = db_thread.image_url.replace(f"{os.getenv('R2_FILE_PATH')}/", "", 1)
-        try:
-            r2.delete_object(Bucket=os.getenv("R2_BUCKET_NAME"), Key=key)
-        except Exception:
-            logger.warning("Failed to delete R2 object for thread %s (key=%s)", db_thread.id, key, exc_info=True)
+        image_key = db_thread.image_url.replace(f"{os.getenv('R2_FILE_PATH')}/", "", 1)
 
     db.delete(db_thread)
     db.commit()
+
+    # Clean up external asset only after successful DB commit
+    if image_key:
+        try:
+            r2.delete_object(Bucket=os.getenv("R2_BUCKET_NAME"), Key=image_key)
+        except Exception:
+            logger.warning(
+                "Failed to delete R2 object for thread %s (key=%s)",
+                db_thread.id,
+                image_key,
+                exc_info=True,
+            )
     return True
 
 
@@ -361,11 +370,7 @@ def create_comment(
 
 
 def update_comment(db: Session, comment_id: str, update_data: Dict):
-    db_comment = (
-        db.query(models.ThreadComment)
-        .filter(models.ThreadComment.id == comment_id)
-        .first()
-    )
+    db_comment = db.get(models.ThreadComment, comment_id)
     if db_comment is None:
         return None
 
@@ -378,11 +383,7 @@ def update_comment(db: Session, comment_id: str, update_data: Dict):
 
 
 def delete_comment(db: Session, comment_id: str):
-    db_comment = (
-        db.query(models.ThreadComment)
-        .filter(models.ThreadComment.id == comment_id)
-        .first()
-    )
+    db_comment = db.get(models.ThreadComment, comment_id)
     if db_comment is None:
         return False
 
