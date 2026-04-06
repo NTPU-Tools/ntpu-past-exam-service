@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any
 
-from alembic import command
 from alembic.config import Config
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Request, Response
@@ -18,6 +17,7 @@ from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
 from starlette.exceptions import HTTPException
 
+from alembic import command
 from auth.router import auth_middleware
 from auth.router import router as auth_router
 from bulletins.router import router as bulletins_router
@@ -172,6 +172,4 @@ def heartbeat():
 
 @app.get("/system-version", tags=["Health Check"])
 def get_system_version():
-    return {
-        "GIT_SHA": os.getenv("COMMIT_SHA")
-    }
+    return {"GIT_SHA": os.getenv("COMMIT_SHA")}

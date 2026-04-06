@@ -1,12 +1,12 @@
 import json
 from typing import Annotated, Optional
 
+import bcrypt
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_cache.decorator import cache
 from jose import ExpiredSignatureError, JWTError
-import bcrypt
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -89,7 +89,9 @@ def get_password_hash(password):
 
 
 def verify_password(plain_password, hashed_password):
-    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+    return bcrypt.checkpw(
+        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+    )
 
 
 @router.post("/exchange")
@@ -302,10 +304,24 @@ def create_user(
         },
     )
 
-    access_token = create_access_token(data={"sub": user.username, "type": "access", "isu": False, "id": user.id, "adm": "[]"})
+    access_token = create_access_token(
+        data={
+            "sub": user.username,
+            "type": "access",
+            "isu": False,
+            "id": user.id,
+            "adm": "[]",
+        }
+    )
 
     refresh_token = create_access_token(
-        data={"sub": user.username, "type": "refresh", "isu": False, "id": user.id, "adm": "[]"},
+        data={
+            "sub": user.username,
+            "type": "refresh",
+            "isu": False,
+            "id": user.id,
+            "adm": "[]",
+        },
         expires_delta=365,
     )
 
