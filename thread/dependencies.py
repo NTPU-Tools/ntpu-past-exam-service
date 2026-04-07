@@ -171,7 +171,7 @@ def create_thread(
 
 
 def update_thread(db: Session, thread_id: str, update_data: Dict):
-    db_thread = db.query(models.Thread).filter(models.Thread.id == thread_id).first()
+    db_thread = db.get(models.Thread, thread_id)
     if db_thread is None:
         return None
 
@@ -185,39 +185,24 @@ def update_thread(db: Session, thread_id: str, update_data: Dict):
 
 
 def delete_thread(db: Session, db_thread: models.Thread):
-    comment_ids = (
-        db.query(models.ThreadComment.id)
-        .filter(models.ThreadComment.thread_id == db_thread.id)
-        .all()
-    )
-    comment_ids = [comment_id for (comment_id,) in comment_ids]
-
-    if comment_ids:
-        db.query(models.CommentLike).filter(
-            models.CommentLike.comment_id.in_(comment_ids)
-        ).delete(synchronize_session=False)
-        # Delete child comments before top-level ones to satisfy the
-        # self-referential FK on parent_comment_id.
-        db.query(models.ThreadComment).filter(
-            models.ThreadComment.thread_id == db_thread.id,
-            models.ThreadComment.parent_comment_id.isnot(None),
-        ).delete(synchronize_session=False)
-        db.query(models.ThreadComment).filter(
-            models.ThreadComment.thread_id == db_thread.id,
-        ).delete(synchronize_session=False)
-
-    db.query(models.ThreadLike).filter(
-        models.ThreadLike.thread_id == db_thread.id
-    ).delete(synchronize_session=False)
+    image_key = None
     if db_thread.image_url:
-        key = db_thread.image_url.replace(f"{os.getenv('R2_FILE_PATH')}/", "", 1)
-        try:
-            r2.delete_object(Bucket=os.getenv("R2_BUCKET_NAME"), Key=key)
-        except Exception:
-            logger.warning("Failed to delete R2 object for thread %s (key=%s)", db_thread.id, key, exc_info=True)
+        image_key = db_thread.image_url.replace(f"{os.getenv('R2_FILE_PATH')}/", "", 1)
 
     db.delete(db_thread)
     db.commit()
+
+    # Clean up external asset only after successful DB commit
+    if image_key:
+        try:
+            r2.delete_object(Bucket=os.getenv("R2_BUCKET_NAME"), Key=image_key)
+        except Exception:
+            logger.warning(
+                "Failed to delete R2 object for thread %s (key=%s)",
+                db_thread.id,
+                image_key,
+                exc_info=True,
+            )
     return True
 
 
@@ -385,11 +370,7 @@ def create_comment(
 
 
 def update_comment(db: Session, comment_id: str, update_data: Dict):
-    db_comment = (
-        db.query(models.ThreadComment)
-        .filter(models.ThreadComment.id == comment_id)
-        .first()
-    )
+    db_comment = db.get(models.ThreadComment, comment_id)
     if db_comment is None:
         return None
 
@@ -401,52 +382,12 @@ def update_comment(db: Session, comment_id: str, update_data: Dict):
     return db_comment
 
 
-_MAX_COMMENT_DELETE_IDS = 10_000
-
-
 def delete_comment(db: Session, comment_id: str):
-    comment_exists = (
-        db.query(models.ThreadComment.id)
-        .filter(models.ThreadComment.id == comment_id)
-        .first()
-    )
-    if comment_exists is None:
+    db_comment = db.get(models.ThreadComment, comment_id)
+    if db_comment is None:
         return False
 
-    comment_ids = [comment_id]
-    seen_comment_ids = {comment_id}
-    cursor = 0
-
-    while cursor < len(comment_ids) and len(comment_ids) < _MAX_COMMENT_DELETE_IDS:
-        parent_ids = comment_ids[cursor : cursor + 100]
-        cursor += len(parent_ids)
-
-        child_ids = [
-            child_id
-            for (child_id,) in db.query(models.ThreadComment.id)
-            .filter(models.ThreadComment.parent_comment_id.in_(parent_ids))
-            .limit(_MAX_COMMENT_DELETE_IDS - len(comment_ids))
-            .all()
-        ]
-
-        for child_id in child_ids:
-            if child_id in seen_comment_ids:
-                continue
-            seen_comment_ids.add(child_id)
-            comment_ids.append(child_id)
-
-    db.query(models.CommentLike).filter(
-        models.CommentLike.comment_id.in_(comment_ids)
-    ).delete(synchronize_session=False)
-    # Delete child comments before parents to satisfy the self-referential FK.
-    db.query(models.ThreadComment).filter(
-        models.ThreadComment.id.in_(comment_ids),
-        models.ThreadComment.parent_comment_id.isnot(None),
-    ).delete(synchronize_session=False)
-    db.query(models.ThreadComment).filter(
-        models.ThreadComment.id.in_(comment_ids),
-    ).delete(synchronize_session=False)
-
+    db.delete(db_comment)
     db.commit()
     return True
 
