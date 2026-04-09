@@ -2,19 +2,28 @@
 import os
 
 import boto3
+from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
-client = boto3.client(
-    service_name="ses",
-    aws_access_key_id=os.getenv("AWS_ACCESS_KEY"),
-    aws_secret_access_key=os.getenv("AWS_ACCESS_SECRET"),
-    region_name="ap-southeast-1",
-)
 sender = os.getenv("AWS_EMAIL_SENDER")
 CHARSET = "UTF-8"
+
+
+def _get_client():
+    aws_access_key = os.getenv("AWS_ACCESS_KEY")
+    aws_access_secret = os.getenv("AWS_ACCESS_SECRET")
+    if not aws_access_key or not aws_access_secret or not sender:
+        return None
+
+    return boto3.client(
+        service_name="ses",
+        aws_access_key_id=aws_access_key,
+        aws_secret_access_key=aws_access_secret,
+        region_name="ap-southeast-1",
+    )
 
 
 def get_notification_template(title, content, cta):
@@ -226,23 +235,34 @@ span.MsoHyperlinkFollowed {
 
 
 def send_notification_mail(title, content, recipients, cta=None):
-    client.send_email(
-        Destination={
-            "ToAddresses": recipients,
-        },
-        Message={
-            "Body": {
-                "Html": {
+    if not recipients:
+        return
+
+    client = _get_client()
+    if client is None:
+        print("Skipping email notification: AWS SES is not configured.")
+        return
+
+    try:
+        client.send_email(
+            Destination={
+                "ToAddresses": recipients,
+            },
+            Message={
+                "Body": {
+                    "Html": {
+                        "Charset": CHARSET,
+                        "Data": get_notification_template(
+                            title=title, content=content, cta=cta
+                        ),
+                    },
+                },
+                "Subject": {
                     "Charset": CHARSET,
-                    "Data": get_notification_template(
-                        title=title, content=content, cta=cta
-                    ),
+                    "Data": f"{'測試環境 - ' if os.getenv('SERVICE_NAME') != 'PROD' else ''}{title} - 北大考古題 NTPU Past Exam",
                 },
             },
-            "Subject": {
-                "Charset": CHARSET,
-                "Data": f"{'測試環境 - ' if os.getenv('SERVICE_NAME') != 'PROD' else ''}{title} - 北大考古題 NTPU Past Exam",
-            },
-        },
-        Source=f"NTPU Tools <{os.getenv('AWS_EMAIL_SENDER')}>",
-    )
+            Source=f"NTPU Tools <{sender}>",
+        )
+    except (NoCredentialsError, ClientError, BotoCoreError) as exc:
+        print(f"Skipping email notification: {exc}")

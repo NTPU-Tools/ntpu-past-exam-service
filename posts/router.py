@@ -18,6 +18,7 @@ load_dotenv()
 
 @router.get("")
 def read_all_post(
+    request: Request,
     status: str = "",
     user_id: str = "",
     course_id: str = "",
@@ -26,8 +27,10 @@ def read_all_post(
     limit: int = 100,
     db: Session = Depends(get_db),
 ):
+    payload = get_access_token_payload(request)
     return dependencies.get_posts(
         db,
+        current_user_id=payload.get("id"),
         status=status,
         user_id=user_id,
         course_id=course_id,
@@ -39,8 +42,9 @@ def read_all_post(
 
 @router.get("/{post_id}")
 @cache(expire=60)
-def get_single_post(post_id: str, db: Session = Depends(get_db)):
-    data = dependencies.get_post(db, post_id)
+def get_single_post(request: Request, post_id: str, db: Session = Depends(get_db)):
+    payload = get_access_token_payload(request)
+    data = dependencies.get_post(db, post_id, payload.get("id"))
     if data is None:
         raise HTTPException(status_code=404)
     return data

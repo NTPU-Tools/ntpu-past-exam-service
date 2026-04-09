@@ -3,10 +3,15 @@ import uuid
 from typing import Dict, List
 
 from dotenv import load_dotenv
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from courses.models import Course
-from departments.dependencies import get_department_admins, get_department_information
+from departments.dependencies import (
+    get_department_admins,
+    get_department_information,
+    get_viewable_departments_ids,
+)
 from static_file.r2 import r2
 from users.models import User
 from utils.send_mail import send_notification_mail
@@ -20,6 +25,7 @@ domain = os.getenv("ORIGIN")
 
 def get_posts(
     db: Session,
+    current_user_id: str,
     status: str,
     user_id: str,
     department_id: str,
@@ -28,6 +34,12 @@ def get_posts(
     limit: int = 100,
 ):
     query_filter = []
+    visible_department_ids = get_viewable_departments_ids(db, current_user_id)
+
+    if not visible_department_ids:
+        return []
+
+    query_filter.append(models.Post.department_id.in_(visible_department_ids))
 
     if status == "PENDING":
         query_filter.append(
@@ -64,7 +76,7 @@ def get_posts(
     return posts
 
 
-def get_post(db: Session, post_id: str):
+def get_post(db: Session, post_id: str, current_user_id: str):
     query_result = (
         db.query(models.Post, User)
         .filter(models.Post.id == post_id)
@@ -74,10 +86,14 @@ def get_post(db: Session, post_id: str):
     if query_result is None:
         return None
 
+    (post, user) = query_result
+    visible_department_ids = get_viewable_departments_ids(db, current_user_id)
+    if post.department_id not in visible_department_ids:
+        raise HTTPException(status_code=404)
+
     query_file_result = (
         db.query(models.PostFile).filter(models.PostFile.post_id == post_id).all()
     )
-    (post, user) = query_result
     data = {
         **post.__dict__,
         "files": [],
