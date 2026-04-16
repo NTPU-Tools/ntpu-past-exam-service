@@ -120,9 +120,13 @@ origins = [
     "https://past-exam.ntpu.cc",
     "https://past-exam.ntpu.xyz",
     "http://localhost",
-    "http://localhost:3000",
+    "http://localhost:5173",
     "http://localhost:8080",
 ]
+
+origin_from_env = os.getenv("ORIGIN")
+if origin_from_env and origin_from_env not in origins:
+    origins.append(origin_from_env)
 
 app.add_middleware(
     CORSMiddleware,
