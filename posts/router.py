@@ -4,9 +4,11 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi_cache.decorator import cache
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from auth.router import admin_middleware
 from sql.database import get_db
+from utils.cache import clear_namespace
 from utils.token import get_access_token_payload
 
 from . import dependencies
@@ -41,7 +43,7 @@ def read_all_post(
 
 
 @router.get("/{post_id}")
-@cache(expire=60)
+@cache(expire=60, namespace="posts")
 def get_single_post(request: Request, post_id: str, db: Session = Depends(get_db)):
     payload = get_access_token_payload(request)
     data = dependencies.get_post(db, post_id, payload.get("id"))
@@ -76,14 +78,23 @@ async def create_post(
         "is_anonymous": is_anonymous,
         "department_id": department_id,
     }
-    post = dependencies.make_post(db, post, user_id, file_array)
-
+    post = await run_in_threadpool(dependencies.make_post, db, post, user_id, file_array)
+    await clear_namespace("course-detail")
     return {"status": "success", "post_id": post.id}
 
 
 @router.put("/status/{department_id}/{post_id}", dependencies=[Depends(admin_middleware)])
-def update_post_status(
-    status: Annotated[str, Form()], post_id: str, db: Session = Depends(get_db)
+async def update_post_status(
+    request: Request,
+    status: Annotated[str, Form()],
+    post_id: str,
+    db: Session = Depends(get_db),
 ):
-    dependencies.update_post_status(db, post_id=post_id, status=status)
-    return {"status": "success"}
+    await run_in_threadpool(dependencies.update_post_status, db, post_id=post_id, status=status)
+    await clear_namespace("posts")
+    await clear_namespace("course-detail")
+    payload = get_access_token_payload(request)
+    updated_post = await run_in_threadpool(
+        dependencies.get_post, db, post_id, payload.get("id")
+    )
+    return updated_post

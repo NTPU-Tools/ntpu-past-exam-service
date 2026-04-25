@@ -1,11 +1,14 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi_cache.decorator import cache
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from auth.router import admin_middleware
 from sql.database import get_db
+from utils.cache import clear_namespace
 from utils.token import get_access_token_payload
 
 from . import dependencies
@@ -20,13 +23,13 @@ def read_all_departments(db: Session = Depends(get_db)):
 
 
 @router.get("/{department_id}/courses")
-@cache(expire=60)
+@cache(expire=60, namespace="dept-courses")
 def get_department_courses(department_id: str, db: Session = Depends(get_db)):
     return dependencies.get_department_courses(db, department_id=department_id)
 
 
 @router.get("/{department_id}/bulletins")
-@cache(expire=60)
+@cache(expire=60, namespace="dept-bulletins")
 def get_department_bulletins(department_id: str, db: Session = Depends(get_db)):
     return dependencies.get_department_bulletins(db, department_id=department_id)
 
@@ -58,7 +61,7 @@ def check_user_is_department_admin(
 
 
 @router.get("/status")
-@cache(expire=60)
+@cache(expire=60, namespace="dept-status")
 def read_user_departments_status(request: Request, db: Session = Depends(get_db)):
     payload = get_access_token_payload(request)
     user_id = payload.get("id")
@@ -66,7 +69,7 @@ def read_user_departments_status(request: Request, db: Session = Depends(get_db)
 
 
 @router.get("/visible")
-@cache(expire=60)
+@cache(expire=60, namespace="dept-visible")
 def read_user_viewable_departments(request: Request, db: Session = Depends(get_db)):
     payload = get_access_token_payload(request)
     user_id = payload.get("id")
@@ -75,15 +78,15 @@ def read_user_viewable_departments(request: Request, db: Session = Depends(get_d
 
 
 @router.post("/{department_id}/join-request/send")
-def send_join_request(
+async def send_join_request(
     request: Request, department_id: str, db: Session = Depends(get_db)
 ):
     payload = get_access_token_payload(request)
     user_id = payload.get("id")
     join_request = {"department_id": department_id, "user_id": user_id}
-    data = dependencies.request_view_department(db, join_request)
-
-    return data.__dict__
+    data = await run_in_threadpool(dependencies.request_view_department, db, join_request)
+    await clear_namespace("dept-status")
+    return jsonable_encoder(data)
 
 
 @router.get("/{department_id}/join-request", dependencies=[Depends(admin_middleware)])
@@ -105,15 +108,21 @@ def get_department_members(department_id: str, db: Session = Depends(get_db)):
 
 
 @router.put("/{department_id}/admin", dependencies=[Depends(admin_middleware)])
-def update_member_admin(
+async def update_member_admin(
     user_id: Annotated[str, Form()],
     is_admin: Annotated[bool, Form()],
     department_id: str,
     db: Session = Depends(get_db),
 ):
-    dependencies.update_member_admin(
-        db, department_id=department_id, user_id=user_id, is_admin=is_admin
+    await run_in_threadpool(
+        dependencies.update_member_admin,
+        db,
+        department_id=department_id,
+        user_id=user_id,
+        is_admin=is_admin,
     )
+    await clear_namespace("user-admin")
+    await clear_namespace("verify-token")
     return {"status": "success"}
 
 
@@ -125,6 +134,8 @@ async def approve_join_request(
     request_id: str,
     db: Session = Depends(get_db),
 ):
-    dependencies.approve_request_view_department(db, request_id)
-
+    await run_in_threadpool(dependencies.approve_request_view_department, db, request_id)
+    await clear_namespace("dept-status")
+    await clear_namespace("dept-visible")
+    await clear_namespace("verify-token")
     return {"status": "success"}

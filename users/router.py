@@ -1,11 +1,14 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi_cache.decorator import cache
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from auth.router import admin_middleware
 from sql.database import get_db
+from utils.cache import clear_namespace
 from utils.token import get_access_token_payload
 
 from . import dependencies
@@ -23,14 +26,14 @@ def read_users(
     users = dependencies.get_users(db, skip=skip, limit=limit, is_active=is_active)
     data = []
     for user in users:
-        u = user.__dict__
-        del u["hashed_password"]
+        u = jsonable_encoder(user)
+        u.pop("hashed_password", None)
         data.append(u)
     return data
 
 
 @router.get("/{user_id}")
-@cache(expire=30)
+@cache(expire=30, namespace="user-detail")
 def read_user(request: Request, user_id: str, db: Session = Depends(get_db)):
     if user_id == "me":
         payload = get_access_token_payload(request)
@@ -38,13 +41,13 @@ def read_user(request: Request, user_id: str, db: Session = Depends(get_db)):
     db_user = dependencies.get_user(db, user_id=user_id)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    data = db_user.__dict__
-    del data["hashed_password"]
+    data = jsonable_encoder(db_user)
+    data.pop("hashed_password", None)
     return data
 
 
 @router.get("/me/departments-admin")
-@cache(expire=30)
+@cache(expire=30, namespace="user-admin")
 def read_user_admin_scopes(request: Request, db: Session = Depends(get_db)):
     payload = get_access_token_payload(request)
     user_id: str = payload.get("id")
@@ -54,14 +57,19 @@ def read_user_admin_scopes(request: Request, db: Session = Depends(get_db)):
 
 
 @router.put("/update/me")
-def update_user_info(
-    school_id: Annotated[str, Form()],
+async def update_user_info(
+    request: Request,
     major: Annotated[str, Form()],
     note: Annotated[str, Form()] = "",
     db: Session = Depends(get_db),
 ):
-    user = dependencies.get_user_by_username(db, school_id)
-    dependencies.update_user(
+    payload = get_access_token_payload(request)
+    user_id: str = payload.get("id")
+    user = await run_in_threadpool(dependencies.get_user, db, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    await run_in_threadpool(
+        dependencies.update_user,
         db,
         {
             "username": user.username,
@@ -71,21 +79,30 @@ def update_user_info(
             "note": note,
         },
     )
-    return {"status": "success"}
+    await clear_namespace("user-detail")
+    await clear_namespace("verify-token")
+    updated_user = await run_in_threadpool(dependencies.get_user, db, user_id)
+    data = jsonable_encoder(updated_user)
+    data.pop("hashed_password", None)
+    return data
 
 
 @router.put("/status/{department_id}/{user_id}", dependencies=[Depends(admin_middleware)])
-def update_user_active_status(
+async def update_user_active_status(
     is_active: Annotated[bool, Form()], user_id: str, db: Session = Depends(get_db)
 ):
-    dependencies.update_user_status(db, user_id=user_id, status=is_active)
+    await run_in_threadpool(dependencies.update_user_status, db, user_id=user_id, status=is_active)
+    await clear_namespace("user-detail")
+    await clear_namespace("verify-token")
     return {"status": "success"}
 
 
 @router.put("/admin/{department_id}/{user_id}", dependencies=[Depends(admin_middleware)])
-def update_user_admin_status(
+async def update_user_admin_status(
     is_admin: Annotated[bool, Form()], user_id: str, db: Session = Depends(get_db)
 ):
-    dependencies.update_user_admin(db, user_id=user_id, is_admin=is_admin)
-
+    await run_in_threadpool(dependencies.update_user_admin, db, user_id=user_id, is_admin=is_admin)
+    await clear_namespace("user-detail")
+    await clear_namespace("user-admin")
+    await clear_namespace("verify-token")
     return {"status": "success"}

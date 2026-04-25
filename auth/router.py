@@ -59,19 +59,25 @@ async def admin_middleware(request: Request):
 
     if payload is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-    is_super_user: bool = payload.get("isu")
-    admin_ids: str = payload.get("adm")
+    is_super_user: bool = payload.get("isu") or False
+    admin_ids = payload.get("adm")
+
+    if is_super_user:
+        return
 
     if admin_ids is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
-    admin_ids = json.loads(admin_ids)
+    if isinstance(admin_ids, str):
+        try:
+            admin_ids = json.loads(admin_ids)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
-    is_department_admin = is_super_user or (
-        department_id is not None and department_id in admin_ids
-    )
+    if not isinstance(admin_ids, list) or len(admin_ids) == 0:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
-    if not is_department_admin:
+    if department_id is None or department_id not in admin_ids:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
 
@@ -223,7 +229,7 @@ def login(
 
 
 @router.get("/verify-token")
-@cache(expire=60)
+@cache(expire=60, namespace="verify-token")
 def verify(request: Request, db: Session = Depends(get_db)):
     try:
         payload = get_access_token_payload(request, options={"verify_exp": False})
