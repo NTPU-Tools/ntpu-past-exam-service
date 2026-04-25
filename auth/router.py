@@ -229,7 +229,6 @@ def login(
 
 
 @router.get("/verify-token")
-@cache(expire=60, namespace="verify-token")
 def verify(request: Request, db: Session = Depends(get_db)):
     try:
         payload = get_access_token_payload(request, options={"verify_exp": False})

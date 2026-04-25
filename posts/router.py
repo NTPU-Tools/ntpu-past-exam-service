@@ -80,6 +80,7 @@ async def create_post(
     }
     post = await run_in_threadpool(dependencies.make_post, db, post, user_id, file_array)
     await clear_namespace("course-detail")
+    await clear_namespace("posts")
     return {"status": "success", "post_id": post.id}
 
 
