@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, String
+from sqlalchemy import Boolean, Column, Integer, String
 
 from sql.database import Base, BaseColumn
 
@@ -15,3 +15,4 @@ class Department(Base, BaseColumn):
     key = Column(String(256))
     name = Column(String(256))
     is_public = Column(Boolean, default=True, index=True)
+    sort_order = Column(Integer, default=999, nullable=False)

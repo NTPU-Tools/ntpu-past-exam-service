@@ -49,7 +49,7 @@ def check_is_department_admin(db: Session, user_id: str, department_id: str):
 
 
 def get_departments(db: Session):
-    return db.query(models.Department).all()
+    return db.query(models.Department).order_by(models.Department.sort_order.asc()).all()
 
 
 def get_viewable_departments(db: Session, user_id: str):
@@ -57,7 +57,7 @@ def get_viewable_departments(db: Session, user_id: str):
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     if user.is_super_user:
-        return db.query(models.Department).all()
+        return db.query(models.Department).order_by(models.Department.sort_order.asc()).all()
     sub_query = db.query(UserDepartment.department_id).filter(
         (UserDepartment.status == "APPROVED")
         & (UserDepartment.user_id == user_id)
@@ -67,6 +67,7 @@ def get_viewable_departments(db: Session, user_id: str):
     visible_departments = (
         db.query(models.Department)
         .filter((sub_query.exists()) | (models.Department.is_public == True))
+        .order_by(models.Department.sort_order.asc())
         .all()
     )
 
@@ -77,7 +78,7 @@ def get_viewable_departments_ids(db: Session, user_id: str):
     user = db.query(User).filter(User.id == user_id).first()
     viewable_departments = []
     if user.is_super_user:
-        for department in db.query(models.Department).all():
+        for department in db.query(models.Department).order_by(models.Department.sort_order.asc()).all():
             viewable_departments.append(department.id)
 
     else:
@@ -90,6 +91,7 @@ def get_viewable_departments_ids(db: Session, user_id: str):
         visible_departments = (
             db.query(models.Department)
             .filter((sub_query.exists()) | (models.Department.is_public == True))
+            .order_by(models.Department.sort_order.asc())
             .all()
         )
 
@@ -103,7 +105,7 @@ def get_departments_status(db: Session, user_id: str):
     user = db.query(User).filter(User.id == user_id).first()
     if user.is_super_user:
         return {
-            "visible": db.query(models.Department).all(),
+            "visible": db.query(models.Department).order_by(models.Department.sort_order.asc()).all(),
             "pending": [],
         }
     sub_query = db.query(UserDepartment.department_id).filter(
@@ -115,6 +117,7 @@ def get_departments_status(db: Session, user_id: str):
     visible_departments = (
         db.query(models.Department)
         .filter((sub_query.exists()) | (models.Department.is_public == True))
+        .order_by(models.Department.sort_order.asc())
         .all()
     )
 
@@ -124,7 +127,12 @@ def get_departments_status(db: Session, user_id: str):
         & (models.Department.id == UserDepartment.department_id)
     )
 
-    pending_departments = db.query(models.Department).filter(sub_query.exists()).all()
+    pending_departments = (
+        db.query(models.Department)
+        .filter(sub_query.exists())
+        .order_by(models.Department.sort_order.asc())
+        .all()
+    )
 
     return {
         "visible": visible_departments,
