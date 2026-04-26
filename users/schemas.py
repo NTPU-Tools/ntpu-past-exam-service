@@ -18,3 +18,7 @@ class User(UserBase):
 
     class Config:
         from_attributes = True
+
+
+class UserPreferencesUpdate(BaseModel):
+    show_empty_courses: bool

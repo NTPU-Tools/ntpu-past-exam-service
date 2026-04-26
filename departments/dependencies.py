@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from bulletins.models import Bulletin
 from courses.models import Course
+from posts.models import Post
 from users.models import User, UserDepartment
 from utils.send_mail import send_notification_mail
 
@@ -21,7 +22,32 @@ def get_department_bulletins(db: Session, department_id: str):
 
 
 def get_department_courses(db: Session, department_id: str):
-    return db.query(Course).filter(Course.department_id == department_id).all()
+    courses = db.query(Course).filter(Course.department_id == department_id).all()
+    course_ids = [c.id for c in courses]
+
+    if not course_ids:
+        return []
+
+    approved_course_ids = {
+        row[0]
+        for row in db.query(Post.course_id)
+        .filter(Post.course_id.in_(course_ids), Post.status == "APPROVED")
+        .distinct()
+        .all()
+    }
+
+    return [
+        {
+            "id": c.id,
+            "name": c.name,
+            "category": c.category,
+            "department_id": c.department_id,
+            "create_time": c.create_time,
+            "updated_time": c.updated_time,
+            "has_posts": c.id in approved_course_ids,
+        }
+        for c in courses
+    ]
 
 
 def check_can_view(db: Session, user_id: str, department_id: str):

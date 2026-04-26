@@ -2,8 +2,6 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from departments.models import Department
-from posts import models
-
 from . import models, schemas
 
 
@@ -90,41 +88,60 @@ def get_users(db: Session, is_active: bool, skip: int = 0, limit: int = 100):
     return db.query(models.User).filter(*query_filter).offset(skip).limit(limit).all()
 
 
+def get_user_preference(db: Session, user_id: str):
+    return (
+        db.query(models.UserPreference)
+        .filter(models.UserPreference.user_id == user_id)
+        .first()
+    )
+
+
+def update_user_preference(db: Session, user_id: str, show_empty_courses: bool):
+    pref = (
+        db.query(models.UserPreference)
+        .filter(models.UserPreference.user_id == user_id)
+        .first()
+    )
+    if pref:
+        pref.show_empty_courses = show_empty_courses
+    else:
+        pref = models.UserPreference(
+            user_id=user_id, show_empty_courses=show_empty_courses
+        )
+        db.add(pref)
+    db.commit()
+    db.refresh(pref)
+    return pref
+
+
 def create_user(db: Session, user: schemas.UserCreate):
-    try:
-        db_user = models.User(
-            username=user["username"],
-            hashed_password=user["hashed_password"],
-            readable_name=user["readable_name"],
-            school_department=user["school_department"],
-            email=user["email"],
-        )
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-        return db_user
-    except KeyError:
-        db_user = models.User(
-            username=user["username"],
-            readable_name=user["readable_name"],
-            school_department=user["school_department"],
-            email=user["email"],
-        )
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-        return db_user
+    user_kwargs = {
+        "username": user["username"],
+        "readable_name": user["readable_name"],
+        "school_department": user["school_department"],
+        "email": user["email"],
+    }
+    if user.get("hashed_password"):
+        user_kwargs["hashed_password"] = user["hashed_password"]
+    db_user = models.User(**user_kwargs)
+    db.add(db_user)
+    db.flush()
+    db_pref = models.UserPreference(user_id=db_user.id, show_empty_courses=True)
+    db.add(db_pref)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
 
 
 def update_user(db: Session, user: schemas.UserCreate):
-    db.query(models.User).filter(models.User.username == user["username"]).update(
-        {
-            "username": user.get('username'),
-            "hashed_password": user.get('hashed_password'),
-            "readable_name": user.get('readable_name'),
-            "school_department": user.get('school_department'),
-            "email": user.get('email'),
-            "note": user.get('note'),
-        }
-    )
+    update_data = {
+        "username": user.get('username'),
+        "readable_name": user.get('readable_name'),
+        "school_department": user.get('school_department'),
+        "email": user.get('email'),
+        "note": user.get('note'),
+    }
+    if user.get('hashed_password'):
+        update_data["hashed_password"] = user['hashed_password']
+    db.query(models.User).filter(models.User.username == user["username"]).update(update_data)
     db.commit()

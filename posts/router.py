@@ -81,6 +81,7 @@ async def create_post(
     post = await run_in_threadpool(dependencies.make_post, db, post, user_id, file_array)
     await clear_namespace("course-detail")
     await clear_namespace("posts")
+    await clear_namespace("dept-courses")
     return {"status": "success", "post_id": post.id}
 
 
@@ -94,6 +95,7 @@ async def update_post_status(
     await run_in_threadpool(dependencies.update_post_status, db, post_id=post_id, status=status)
     await clear_namespace("posts")
     await clear_namespace("course-detail")
+    await clear_namespace("dept-courses")
     payload = get_access_token_payload(request)
     updated_post = await run_in_threadpool(
         dependencies.get_post, db, post_id, payload.get("id")

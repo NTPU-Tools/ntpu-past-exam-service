@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, Form, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi_cache.decorator import cache
 from sqlalchemy.orm import Session
@@ -11,7 +11,7 @@ from sql.database import get_db
 from utils.cache import clear_namespace
 from utils.token import get_access_token_payload
 
-from . import dependencies
+from . import dependencies, schemas
 
 router = APIRouter(prefix="/users")
 
@@ -35,7 +35,8 @@ def read_users(
 @router.get("/{user_id}")
 @cache(expire=30, namespace="user-detail")
 def read_user(request: Request, user_id: str, db: Session = Depends(get_db)):
-    if user_id == "me":
+    is_me = user_id == "me"
+    if is_me:
         payload = get_access_token_payload(request)
         user_id: str = payload.get("id")
     db_user = dependencies.get_user(db, user_id=user_id)
@@ -43,6 +44,9 @@ def read_user(request: Request, user_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
     data = jsonable_encoder(db_user)
     data.pop("hashed_password", None)
+    if is_me:
+        pref = dependencies.get_user_preference(db, user_id)
+        data["show_empty_courses"] = pref.show_empty_courses if pref else True
     return data
 
 
@@ -85,6 +89,25 @@ async def update_user_info(
     data = jsonable_encoder(updated_user)
     data.pop("hashed_password", None)
     return data
+
+
+@router.put("/me/preferences")
+async def update_user_preferences(
+    request: Request,
+    preferences: schemas.UserPreferencesUpdate,
+    db: Session = Depends(get_db),
+):
+    payload = get_access_token_payload(request)
+    user_id: str = payload.get("id")
+    pref = await run_in_threadpool(
+        dependencies.update_user_preference,
+        db,
+        user_id,
+        preferences.show_empty_courses,
+    )
+    await clear_namespace("user-detail")
+    await clear_namespace("verify-token")
+    return {"show_empty_courses": pref.show_empty_courses if pref else True}
 
 
 @router.put("/status/{department_id}/{user_id}", dependencies=[Depends(admin_middleware)])

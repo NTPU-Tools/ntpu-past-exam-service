@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, String, Text
+from sqlalchemy import Boolean, Column, ForeignKey, String, Text
 
 from sql.database import Base, BaseColumn
 
@@ -15,10 +15,19 @@ class User(Base, BaseColumn):
     is_super_user = Column(Boolean, default=False)
 
 
+class UserPreference(Base, BaseColumn):
+    __tablename__ = "user_preferences"
+
+    user_id = Column(
+        String(256), ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True, nullable=False
+    )
+    show_empty_courses = Column(Boolean, default=True, nullable=False)
+
+
 class UserDepartment(Base, BaseColumn):
     __tablename__ = "users_departments"
 
-    user_id = Column(String(256), index=True)
-    department_id = Column(String(256), index=True)
+    user_id = Column(String(256), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    department_id = Column(String(256), ForeignKey("departments.id", ondelete="CASCADE"), index=True)
     status = Column(String(256), default="PENDING", index=True)
     is_department_admin = Column(Boolean, default=False, index=True)
