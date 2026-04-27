@@ -88,6 +88,8 @@ async def update_user_info(
     updated_user = await run_in_threadpool(dependencies.get_user, db, user_id)
     data = jsonable_encoder(updated_user)
     data.pop("hashed_password", None)
+    pref = dependencies.get_user_preference(db, user_id)
+    data["show_empty_courses"] = pref.show_empty_courses if pref else True
     return data
 
 
