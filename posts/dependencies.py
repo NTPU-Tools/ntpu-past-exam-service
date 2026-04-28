@@ -1,6 +1,9 @@
+import logging
 import os
 import uuid
 from typing import Dict, List
+
+logger = logging.getLogger(__name__)
 
 from dotenv import load_dotenv
 from fastapi import HTTPException
@@ -150,6 +153,32 @@ def make_post(db: Session, post: Dict, user_id: str, file_array: List[bytes]):
                 },
             )
     return db_post
+
+
+def delete_post(db: Session, post_id: str):
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    files = db.query(models.PostFile).filter(models.PostFile.post_id == post_id).all()
+    bucket = os.getenv("R2_BUCKET_NAME")
+    file_path_prefix = os.getenv("R2_FILE_PATH")
+
+    file_keys = []
+    for file in files:
+        url = file.__dict__["url"]
+        key = url.replace(f"{file_path_prefix}/", "", 1)
+        file_keys.append(key)
+        db.delete(file)
+
+    db.delete(post)
+    db.commit()
+
+    for key in file_keys:
+        try:
+            r2.delete_object(Bucket=bucket, Key=key)
+        except Exception:
+            logger.warning("Failed to delete R2 object for post %s (key=%s)", post_id, key, exc_info=True)
 
 
 def update_post_status(db: Session, post_id: str, status: str):

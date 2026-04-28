@@ -1,7 +1,8 @@
+import json
 from typing import Annotated, List
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi_cache.decorator import cache
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
@@ -11,7 +12,7 @@ from sql.database import get_db
 from utils.cache import clear_namespace
 from utils.token import get_access_token_payload
 
-from . import dependencies
+from . import dependencies, models
 
 router = APIRouter(prefix="/posts")
 
@@ -101,3 +102,35 @@ async def update_post_status(
         dependencies.get_post, db, post_id, payload.get("id")
     )
     return updated_post
+
+
+@router.delete("/{post_id}")
+async def delete_post(
+    request: Request,
+    post_id: str,
+    db: Session = Depends(get_db),
+):
+    payload = get_access_token_payload(request)
+    is_super_user = payload.get("isu") or False
+    admin_ids = payload.get("adm")
+
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    if not is_super_user:
+        if admin_ids is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        if isinstance(admin_ids, str):
+            try:
+                admin_ids = json.loads(admin_ids)
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        if not isinstance(admin_ids, list) or post.department_id not in admin_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    await run_in_threadpool(dependencies.delete_post, db, post_id)
+    await clear_namespace("posts")
+    await clear_namespace("course-detail")
+    await clear_namespace("dept-courses")
+    return {"status": "success"}
