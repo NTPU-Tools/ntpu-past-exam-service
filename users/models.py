@@ -22,6 +22,7 @@ class UserPreference(Base, BaseColumn):
         String(256), ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True, nullable=False
     )
     show_empty_courses = Column(Boolean, default=True, nullable=False)
+    default_is_anonymous = Column(Boolean, default=False, nullable=False)
 
 
 class UserDepartment(Base, BaseColumn):

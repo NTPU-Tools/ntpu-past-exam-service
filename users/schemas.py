@@ -22,3 +22,4 @@ class User(UserBase):
 
 class UserPreferencesUpdate(BaseModel):
     show_empty_courses: bool
+    default_is_anonymous: bool

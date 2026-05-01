@@ -47,6 +47,7 @@ def read_user(request: Request, user_id: str, db: Session = Depends(get_db)):
     if is_me:
         pref = dependencies.get_user_preference(db, user_id)
         data["show_empty_courses"] = pref.show_empty_courses if pref else True
+        data["default_is_anonymous"] = pref.default_is_anonymous if pref else False
     return data
 
 
@@ -90,6 +91,7 @@ async def update_user_info(
     data.pop("hashed_password", None)
     pref = dependencies.get_user_preference(db, user_id)
     data["show_empty_courses"] = pref.show_empty_courses if pref else True
+    data["default_is_anonymous"] = pref.default_is_anonymous if pref else False
     return data
 
 
@@ -106,10 +108,14 @@ async def update_user_preferences(
         db,
         user_id,
         preferences.show_empty_courses,
+        preferences.default_is_anonymous,
     )
     await clear_namespace("user-detail")
     await clear_namespace("verify-token")
-    return {"show_empty_courses": pref.show_empty_courses if pref else True}
+    return {
+        "show_empty_courses": pref.show_empty_courses if pref else True,
+        "default_is_anonymous": pref.default_is_anonymous if pref else False,
+    }
 
 
 @router.put("/status/{department_id}/{user_id}", dependencies=[Depends(admin_middleware)])

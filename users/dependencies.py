@@ -96,7 +96,7 @@ def get_user_preference(db: Session, user_id: str):
     )
 
 
-def update_user_preference(db: Session, user_id: str, show_empty_courses: bool):
+def update_user_preference(db: Session, user_id: str, show_empty_courses: bool, default_is_anonymous: bool):
     pref = (
         db.query(models.UserPreference)
         .filter(models.UserPreference.user_id == user_id)
@@ -104,9 +104,12 @@ def update_user_preference(db: Session, user_id: str, show_empty_courses: bool):
     )
     if pref:
         pref.show_empty_courses = show_empty_courses
+        pref.default_is_anonymous = default_is_anonymous
     else:
         pref = models.UserPreference(
-            user_id=user_id, show_empty_courses=show_empty_courses
+            user_id=user_id,
+            show_empty_courses=show_empty_courses,
+            default_is_anonymous=default_is_anonymous,
         )
         db.add(pref)
     db.commit()
@@ -126,7 +129,9 @@ def create_user(db: Session, user: schemas.UserCreate):
     db_user = models.User(**user_kwargs)
     db.add(db_user)
     db.flush()
-    db_pref = models.UserPreference(user_id=db_user.id, show_empty_courses=True)
+    db_pref = models.UserPreference(
+        user_id=db_user.id, show_empty_courses=True, default_is_anonymous=False
+    )
     db.add(db_pref)
     db.commit()
     db.refresh(db_user)
