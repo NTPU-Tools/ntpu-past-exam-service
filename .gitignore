@@ -8,3 +8,4 @@ __pycache__
 
 # Rust contract test build output
 contract-tests/target/
+rust/target/

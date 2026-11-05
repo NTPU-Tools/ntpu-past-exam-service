@@ -22,6 +22,7 @@ python3 contract-tests/scripts/check_route_coverage.py                     # rou
 ```
 
 參考實作上的結果（本 branch 建立時）：**160 passed / 0 failed**（含 4 個 `rust_only` 測試在 reference 模式下直接略過），多次連續執行穩定，約 5 秒。
+Rust 實作（`rust/`）的結果：**160 passed / 0 failed**（含全部 `rust_only` 測試）＋ `cargo test` 的 **14 個向量驅動單元測試**全過。
 以 `CONTRACT_TARGET=rust` 對參考實作執行時，刻意修正的測試如預期失敗：F-01（回 500）、F-08（物件為 `binary/octet-stream`）、F-14（`/openapi.json` 回 200）；F-05 單獨執行時失敗（快取未清），但在整套並行執行時可能因其他測試清除同一 namespace 而偶然通過——對 Rust 版的驗收仍然有效。
 
 ## 8.3 測試設計原則

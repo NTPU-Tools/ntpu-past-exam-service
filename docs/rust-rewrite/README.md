@@ -4,7 +4,7 @@
 目標是「對前端與資料庫行為相容的替換」（drop-in replacement）：同一個前端、同一個 PostgreSQL、
 同一個 Redis、同一個 R2 bucket，切換後使用者不需重新登入。
 
-本 branch **不包含 Rust 實作**，只包含：
+Rust 實作位於 [`rust/`](../../rust/)，已通過本規格的全部契約測試。本目錄包含：
 
 | 路徑 | 內容 |
 | --- | --- |
@@ -21,6 +21,7 @@
 | `contract-tests/` | 黑箱 HTTP 契約測試（Rust crate），可同時對現行 Python 後端與未來 Rust 後端執行 |
 | `contract-tests/vectors/` | 無法黑箱測試之邏輯的測試向量（JSON），給 Rust 單元測試使用 |
 | `contract-tests/fixtures/` | LMS HTML / Google 回應範例，給 Rust 外部整合的單元測試使用 |
+| `rust/` | Rust 實作（Axum + SQLx + Redis + opendal/SES） |
 
 ## 用語
 
@@ -43,8 +44,10 @@ docker compose -f contract-tests/docker-compose.yml up -d --build --wait
 # 2. 對參考後端執行契約測試
 cd contract-tests && cargo test
 
-# 3. 未來對 Rust 後端：以 contract-tests/contract.env 啟動 Rust 服務後
-CONTRACT_BASE_URL=http://127.0.0.1:58081 CONTRACT_TARGET=rust cargo test
+# 3. 對 Rust 後端：以 contract-tests/contract.env 啟動 rust/ 服務後
+cd rust && set -a && . ../contract-tests/contract.env && set +a && cargo run -- serve
+# 另一個終端：
+cd contract-tests && CONTRACT_BASE_URL=http://127.0.0.1:58081 CONTRACT_TARGET=rust cargo test
 ```
 
 詳見 `08-testing.md`。

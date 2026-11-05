@@ -47,7 +47,7 @@
 ### 3.1.3 從 `Authorization` header 取 access token
 
 header 值以**單一空白**切割，必須恰好兩段且第一段為大小寫敏感的 `Bearer`，否則
-`401 {"detail":"Invalid or missing authorization header"}`。（`Bearer `（空 token）會通過此步驟並在 decode 失敗；`Bearer  x`（兩個空白）在此步驟失敗。）
+`401 {"detail":"Invalid or missing authorization header"}`。（`Bearer `（空 token）在 Python 會通過此步驟並在 decode 失敗；但 HTTP parser 可能把結尾空白 trim 掉，因此 Rust 版允許回 `Invalid or expired token` 或 `Invalid or missing authorization header`。`Bearer  x`（兩個空白）在此步驟失敗。）
 之後 `decode(token, "access")`。
 
 ## 3.2 目前使用者解析

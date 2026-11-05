@@ -27,11 +27,22 @@ async fn missing_or_malformed_authorization_header() {
                 .await
                 .expect_detail(401, "Invalid or missing authorization header");
         }
-        ctx.get(&path)
+        // Browsers/proxies strip trailing OWS from header values, so "Bearer " can
+        // arrive as "Bearer" (invalid header) or with the space (invalid token).
+        let resp = ctx
+            .get(&path)
             .header("Authorization", "Bearer ")
             .send()
-            .await
-            .expect_detail(401, "Invalid or expired token");
+            .await;
+        resp.expect(401);
+        assert!(
+            matches!(
+                resp.detail().as_str(),
+                "Invalid or expired token" | "Invalid or missing authorization header"
+            ),
+            "unexpected detail: {}",
+            resp.detail()
+        );
     }
 }
 
