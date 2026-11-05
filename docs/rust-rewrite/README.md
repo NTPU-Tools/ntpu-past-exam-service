@@ -18,7 +18,7 @@ Rust 實作位於 [`rust/`](../../rust/)，已通過本規格的全部契約測�
 | `docs/rust-rewrite/08-testing.md` | 測試策略、如何執行、**功能覆蓋矩陣**（每個功能 → 對應測試） |
 | `docs/rust-rewrite/schema.sql` | 目前 PostgreSQL schema（Alembic head `4d7c2a91b6e3`） |
 | `docs/rust-rewrite/assets/` | 通知信 HTML 模板（從現行程式碼原樣抽出） |
-| `contract-tests/` | 黑箱 HTTP 契約測試（Rust crate），可同時對現行 Python 後端與未來 Rust 後端執行 |
+| `contract-tests/` | 黑箱 HTTP 契約測試（Rust crate），同時對現行 Python 後端與 Rust 後端執行 |
 | `contract-tests/vectors/` | 無法黑箱測試之邏輯的測試向量（JSON），給 Rust 單元測試使用 |
 | `contract-tests/fixtures/` | LMS HTML / Google 回應範例，給 Rust 外部整合的單元測試使用 |
 | `rust/` | Rust 實作（Axum + SQLx + Redis + opendal/SES） |

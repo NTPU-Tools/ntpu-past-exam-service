@@ -20,7 +20,7 @@
 - `Source`：`NTPU Tools <{AWS_EMAIL_SENDER}>`。
 - `Destination.ToAddresses`：收件者清單（單封信、多個收件者）；清單為空則不寄。
 - 收件者位址：`users.email`，為 NULL 時 `s{username}@gm.ntpu.edu.tw`。
-- 主旨（UTF-8）：`{prefix}{title} - 北大考古題 NTPU Past Exam`；`SERVICE_NAME != "PROD"` 時 `prefix = "測試環境 - "`，否則空字串（見 Q-01）。
+- 主旨（UTF-8）：`{prefix}{title} - 北大考古題 NTPU Past Exam`。`EMAIL_SUBJECT_PREFIX` 有設定時直接使用；否則 `SERVICE_NAME` 以非英數字切分後含 `prod`/`production`（不分大小寫，例如 `PROD`、`oracle-production-coolify`）→ 空字串，其餘 → `"測試環境 - "`（F-16）。
 - 內文（HTML，UTF-8）：`assets/notification-email.html`，將 `{{TITLE}}`、`{{CONTENT}}` 代入，`{{CTA_BLOCK}}` 代入 `assets/notification-email-cta.html`（`{{CTA_LINK}}`、`{{CTA_TEXT}}`）或空字串（無 CTA）。兩個檔案為參考實作輸出的逐字元結果。Rust MUST 對代入值做 HTML escape（F-03）。
 - 向量：`contract-tests/vectors/email.json`（E1/E2 的完整 HTML 輸出，以及 `SendEmail` 呼叫的 subject/source/to/charset；Rust 對不含特殊字元的值 MUST 產生逐字元相同的 HTML）。
 - 寄信失敗 MUST NOT 影響 API 回應（只 log）；SHOULD 於 DB commit 之後以背景工作送出（F-04）。
@@ -104,7 +104,7 @@ entry key : {CACHE_PREFIX}:{namespace}:{gen}:{user_id}:{route}:{sha256(path+quer
 | Key pattern | 擁有者 | 相容性 |
 | --- | --- | --- |
 | `auth:refresh-session:{sha256(sid)}` | auth | **必須與 Python 相同** |
-| `auth:legacy-refresh-used:{sha256(token)}` | auth | **必須與 Python 相同** |
+| `auth:legacy-refresh-used:{sha256(token)}` | Python 歷史遺留 | Rust 不讀不寫（F-18） |
 | `rate-limit:auth:{window}:{sha256(ident)[:32]}` | rate limit | **必須與 Python 相同** |
 | `fastapi-cache:v2:{ns}:…` | Python 快取 | Rust 只刪不讀 |
 | `{CACHE_PREFIX}:…` | Rust 快取 | Rust 專用 |

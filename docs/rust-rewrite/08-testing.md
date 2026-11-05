@@ -21,8 +21,8 @@ CONTRACT_BASE_URL=http://127.0.0.1:58081 CONTRACT_TARGET=rust cargo test
 python3 contract-tests/scripts/check_route_coverage.py                     # route 覆蓋檢查
 ```
 
-參考實作上的結果（本 branch 建立時）：**160 passed / 0 failed**（含 4 個 `rust_only` 測試在 reference 模式下直接略過），多次連續執行穩定，約 5 秒。
-Rust 實作（`rust/`）的結果：**160 passed / 0 failed**（含全部 `rust_only` 測試）＋ `cargo test` 的 **14 個向量驅動單元測試**全過。
+參考實作上的結果（本 branch 建立時）：**161 passed / 0 failed**（含 7 個 `rust_only` 測試在 reference 模式下直接略過），多次連續執行穩定。
+Rust 實作（`rust/`）的結果：**161 passed / 0 failed**（含全部 `rust_only` 測試）＋ `cargo test` 的 **13 個向量驅動單元測試**全過。
 以 `CONTRACT_TARGET=rust` 對參考實作執行時，刻意修正的測試如預期失敗：F-01（回 500）、F-08（物件為 `binary/octet-stream`）、F-14（`/openapi.json` 回 200）；F-05 單獨執行時失敗（快取未清），但在整套並行執行時可能因其他測試清除同一 namespace 而偶然通過——對 Rust 版的驗收仍然有效。
 
 ## 8.3 測試設計原則
@@ -64,7 +64,7 @@ Rust 實作（`rust/`）的結果：**160 passed / 0 failed**（含全部 `rust_
 | 03 §3.1.3 | Authorization header 解析 | `auth_tokens::missing_or_malformed_authorization_header` | |
 | 03 §3.2 | 模式 A（id→sub→username，含 `id` 查無時退回 `sub`）、模式 B | `auth_tokens::deleted_user_is_rejected`、`early_tokens_resolve_*`、`unknown_id_claim_falls_back_to_sub`、`thread_endpoints_require_the_id_claim` | |
 | 03 §3.3 | 不信任 claim、live DB、pending 不授權、super | `auth_tokens::forged_*`、`live_super_*`、`revoked_privileges_*`、`pending_admin_*`、`super_user_passes_admin_guard_*` | |
-| 03 §3.4 | Session 註冊/輪替/重放/撤銷/legacy 遷移、Redis key 相容 | `auth_session::issued_tokens_*`、`cookie_refresh_rotates_*`、`rotated_refresh_token_*`、`refresh_rejections`、`legacy_bearer_*`、`refresh_logout_*`（4 個）、`sessions_created_by_another_implementation_*` | `legacy_refresh_window.json`；L3：Redis 不可用 → 503 |
+| 03 §3.4 | Session 註冊/輪替/重放/撤銷、Redis key 相容；legacy 已移除（F-18） | `auth_session::issued_tokens_*`、`cookie_refresh_rotates_*`、`rotated_refresh_token_*`、`refresh_rejections`、`legacy_refresh_bearer_is_rejected_after_removal`、`refresh_logout_*`（5 個）、`sessions_created_by_another_implementation_*` | L3：Redis 不可用 → 503 |
 | 03 §3.5 | Cookie 屬性、刪除、no-store、Origin/CSRF | `auth_session::login_returns_*`、`logout_endpoints_*`（2 個）、`cookie_refresh_requires_origin_and_csrf_header`、`cookie_takes_precedence_over_bearer`、`login_origin_checks` | `auth_origins.json`；L3：`AUTH_COOKIE_SECURE=true` 帶 `Secure` |
 | 03 §3.6 | Rate limit（subject/global/IP/XFF/casefold/key 格式/不計被拒 Origin/欄位缺漏仍計數） | `auth_rate_limit::*`（11 個） | `client_ip.json`、`rate_limit.json`；L3：Redis 錯誤 fail-open + log 節流 |
 | 03 §3.7.1 | 密碼登入成功/失敗、`grant_type` | `auth_session::login_failures`、`login_returns_*` | `bcrypt.json`、`lms_username.json` |
@@ -78,7 +78,7 @@ Rust 實作（`rust/`）的結果：**160 passed / 0 failed**（含全部 `rust_
 | 04 §4.3 | `/users*` 全部 | `users::*`（15 個） | |
 | 04 §4.4 | `/departments*` 全部 | `departments::*`（19 個） | |
 | 04 §4.5–4.6 | `/courses*`、`/bulletins*`（含 P-12 不檢查系所存在） | `courses_bulletins::*`（9 個） | |
-| 04 §4.7 | `/posts*`：建立/上傳限制/可見性/篩選/排序/審核（含系所列不存在時 commit 後 404）/刪除/R2 物件 | `posts::*`（21 個） | `upload_magic.json`；L3：上傳失敗 rollback + 清除物件、刪除物件失敗只 log |
+| 04 §4.7 | `/posts*`：建立/上傳限制/可見性/篩選（含 F-17 匿名保護）/排序/審核（含系所列不存在時 commit 後 404）/刪除/R2 物件 | `posts::*`（22 個） | `upload_magic.json`；L3：上傳失敗 rollback + 清除物件、刪除物件失敗只 log |
 | 04 §4.8 | threads：建立/圖片/列表/詳情/更新/刪除/按讚/併發 | `threads::*`（12 個） | `upload_magic.json`；L3：圖片上傳失敗不留列 |
 | 04 §4.8 | comments：建立/錯誤/列表/樹/深度 10/上限 500/更新/刪除/按讚/可見性 | `comments::*`（11 個） | |
 | 05 §5.2–5.3 | INSERT 預設值、`updated_time`（含 no-op 不更新） | 各建立測試檢查 DB 列；`users::update_me_*`、`departments::set_member_admin_flag`、`unchanged_admin_flag_does_not_touch_updated_time`、`posts::status_update_*`、`unchanged_status_does_not_touch_updated_time`、`threads::toggle_thread_like` | |
@@ -86,7 +86,7 @@ Rust 實作（`rust/`）的結果：**160 passed / 0 failed**（含全部 `rust_
 | 06 §6.1 | R2 key / URL / 刪除 | `posts::uploaded_pdfs_are_stored_and_listed`、`delete_by_admin_*`；`threads::create_thread_with_image_*`、`delete_thread_removes_its_image` | |
 | 06 §6.2 | Email 事件 E1–E6、主旨前綴、HTML | — | `email.json`；L3：mock SES（`AWS_SES_ENDPOINT`）驗證每個事件的收件者/主旨/內文、escape（F-03）、失敗不影響回應（F-04） |
 | 06 §6.3 | 快取隔離與失效矩陣（只驗證黑箱**可觀察**的項目，見 `06` §6.3.3 說明） | `cache_invalidation::*`（6 個）、`departments::approve_join_request`、`join_request_send_refreshes_status_cache`、`courses_bulletins::create_*`、`posts::status_update_by_department_admin`、`delete_by_admin_*`（含 `dept-courses`） | L3：矩陣中不可觀察的 namespace 也有清除、Redis 錯誤時 fail-open、舊 prefix 清除 |
-| 07 F-xx | 刻意修正 | `comments::empty_parent_comment_id_*`（F-01）、`cache_invalidation::approval_refreshes_departments_admin_cache`（F-05）、`posts::uploaded_pdf_has_pdf_content_type`（F-08）、`platform::openapi_schema_is_not_exposed`（F-14） | 其餘 F 項見 §8.5 |
+| 07 F-xx | 刻意修正 | `comments::empty_parent_comment_id_*`（F-01）、`cache_invalidation::approval_refreshes_departments_admin_cache`（F-05）、`posts::uploaded_pdf_has_pdf_content_type`（F-08）、`platform::openapi_schema_is_not_exposed`（F-14）、`posts::anonymous_posts_are_not_discoverable_through_the_user_filter`（F-17）、`auth_session::legacy_refresh_bearer_is_rejected_after_removal` / `refresh_logout_with_a_legacy_cookie_is_idempotent`（F-18） | F-16 由 `tests::email_rendering_vectors` 覆蓋；其餘 F 項見 §8.5 |
 
 ### 8.4.3 既有 Python 測試的對應
 
@@ -115,6 +115,6 @@ Rust 實作（`rust/`）的結果：**160 passed / 0 failed**（含全部 `rust_
 ## 8.6 已知的測試限制
 
 - LMS fixtures 為依 parser 邏輯合成，非真實頁面（Q-17）；P3 時應以測試帳號錄製真實回應替換，再重新產生 `vectors/lms.json`。
-- 契約環境啟用 legacy refresh 與 `AUTH_COOKIE_SECURE=false`；相反設定的行為由 L2/L3 驗證。
+- 契約環境使用 `AUTH_COOKIE_SECURE=false`；相反設定的行為由 L2/L3 驗證。Legacy refresh 已移除（F-18），相關測試在 reference 模式會略過。
 - 黑箱測試無法觀察 email 與 log；這兩者完全依賴 L3。
 - `GET /posts` 在「完全沒有可見系所」時回 `[]` 的分支無法在共用資料庫中建構（其他測試建立的公開系所對所有人可見），由 L3 驗證。

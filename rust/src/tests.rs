@@ -212,27 +212,6 @@ fn google_school_id_vectors() {
 }
 
 #[test]
-fn legacy_refresh_window_vectors() {
-    let data = vector("legacy_refresh_window.json");
-    for case in data["cases"].as_array().unwrap() {
-        let allow = case["AUTH_ALLOW_LEGACY_REFRESH_BEARER"]
-            .as_str()
-            .map(config::flag_value);
-        let now: DateTime<Utc> = case["now"]
-            .as_str()
-            .unwrap()
-            .parse::<DateTime<Utc>>()
-            .unwrap();
-        assert_eq!(
-            config::legacy_refresh_enabled(allow, now),
-            case["enabled"].as_bool().unwrap(),
-            "legacy case {:?}",
-            case["case"]
-        );
-    }
-}
-
-#[test]
 fn rate_limit_key_vectors() {
     let data = vector("rate_limit.json");
     for case in data["window_keys"].as_array().unwrap() {
@@ -307,11 +286,25 @@ fn email_rendering_vectors() {
     }
     for case in data["send_email_calls"].as_array().unwrap() {
         let service_name = case["SERVICE_NAME"].as_str().unwrap_or("local");
+        // F-16: production is detected by name, so `oracle-production-coolify`
+        // no longer receives the test prefix (the reference vector does).
+        let expected = if config::is_production(service_name) {
+            "審核通過 - 北大考古題 NTPU Past Exam".to_string()
+        } else {
+            case["subject"].as_str().unwrap().to_string()
+        };
         assert_eq!(
             crate::mail::subject(service_name, "審核通過"),
-            case["subject"].as_str().unwrap()
+            expected,
+            "subject for SERVICE_NAME={service_name:?}"
         );
     }
+    assert!(config::is_production("PROD"));
+    assert!(config::is_production("production"));
+    assert!(config::is_production("oracle-production-coolify"));
+    assert!(!config::is_production("local"));
+    assert!(!config::is_production("contract"));
+    assert!(!config::is_production("staging"));
 }
 
 #[test]

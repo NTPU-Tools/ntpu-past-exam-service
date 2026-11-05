@@ -66,11 +66,15 @@ pub fn render(title: &str, content: &str, cta: Option<(&str, &str)>) -> String {
 }
 
 pub(crate) fn subject(service_name: &str, title: &str) -> String {
-    let prefix = if service_name == "PROD" {
+    let prefix = if crate::config::is_production(service_name) {
         ""
     } else {
         "測試環境 - "
     };
+    subject_with_prefix(prefix, title)
+}
+
+pub(crate) fn subject_with_prefix(prefix: &str, title: &str) -> String {
     format!("{prefix}{title} - 北大考古題 NTPU Past Exam")
 }
 
@@ -78,6 +82,7 @@ pub struct Mailer {
     client: Option<Client>,
     sender: Option<String>,
     service_name: String,
+    subject_prefix: Option<String>,
 }
 
 impl Mailer {
@@ -103,6 +108,7 @@ impl Mailer {
             client,
             sender: config.mail.as_ref().map(|mail| mail.sender.clone()),
             service_name: config.service_name.clone(),
+            subject_prefix: config.email_subject_prefix.clone(),
         }
     }
 
@@ -122,7 +128,10 @@ impl Mailer {
             return;
         }
         let sender = self.sender.clone().unwrap_or_default();
-        let subject = subject(&self.service_name, title);
+        let subject = match &self.subject_prefix {
+            Some(prefix) => subject_with_prefix(prefix, title),
+            None => subject(&self.service_name, title),
+        };
         let html = render(
             title,
             content,

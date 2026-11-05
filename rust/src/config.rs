@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
 use anyhow::{bail, Context};
-use chrono::{DateTime, Utc};
 use ipnet::IpNet;
 
 pub const REFRESH_COOKIE_NAME: &str = "ntpu-past-exam-refresh-token-v2";
@@ -12,9 +11,6 @@ pub const REFRESH_SESSION_VERSION: i64 = 1;
 pub const CSRF_HEADER_NAME: &str = "x-csrf-protection";
 pub const CSRF_HEADER_VALUE: &str = "1";
 pub const SCHEMA_HEAD: &str = "4d7c2a91b6e3";
-
-/// 2026-11-03T00:00:00Z, mirroring `auth/refresh_sessions.py`.
-pub const DEFAULT_LEGACY_MIGRATION_DEADLINE: i64 = 1_793_664_000;
 
 pub fn load_dotenv() {
     // Matches python-dotenv `load_dotenv()`: existing environment wins.
@@ -104,7 +100,7 @@ pub struct Config {
     pub origin: Option<String>,
     pub allowed_auth_origins: HashSet<String>,
     pub cookie_secure: bool,
-    pub allow_legacy_refresh: Option<bool>,
+    pub email_subject_prefix: Option<String>,
     pub rate_limit: RateLimitConfig,
     pub google_client_id: Option<String>,
     pub google_client_secret: Option<String>,
@@ -156,8 +152,6 @@ impl Config {
             None => format!("redis://{redis_host}:{redis_port}/0"),
         };
 
-        let allow_legacy_refresh = var("AUTH_ALLOW_LEGACY_REFRESH_BEARER").map(|v| flag_value(&v));
-
         let mut trusted_proxies = Vec::new();
         if let Some(value) = var("AUTH_RATE_LIMIT_TRUSTED_PROXY_CIDRS") {
             for item in value.split(',').map(str::trim).filter(|i| !i.is_empty()) {
@@ -199,7 +193,7 @@ impl Config {
             origin: var("ORIGIN").filter(|v| !v.is_empty()),
             allowed_auth_origins: allowed_auth_origins_from_env(),
             cookie_secure: env_bool("AUTH_COOKIE_SECURE", true),
-            allow_legacy_refresh,
+            email_subject_prefix: var("EMAIL_SUBJECT_PREFIX"),
             rate_limit: RateLimitConfig {
                 subject_limit: positive_int("AUTH_RATE_LIMIT_REQUESTS", 10),
                 global_limit: positive_int("AUTH_RATE_LIMIT_GLOBAL_REQUESTS", 300),
@@ -235,20 +229,16 @@ impl Config {
         })
     }
 
-    pub fn legacy_refresh_bearer_enabled(&self, now: DateTime<Utc>) -> bool {
-        legacy_refresh_enabled(self.allow_legacy_refresh, now)
-    }
-
     pub fn origin_or_empty(&self) -> String {
         self.origin.clone().unwrap_or_default()
     }
 }
 
-pub(crate) fn legacy_refresh_enabled(allow: Option<bool>, now: DateTime<Utc>) -> bool {
-    match allow {
-        Some(value) => value,
-        None => now.timestamp() < DEFAULT_LEGACY_MIGRATION_DEADLINE,
-    }
+/// Production names look like `PROD`, `production`, `oracle-production-coolify`.
+pub(crate) fn is_production(service_name: &str) -> bool {
+    service_name
+        .split(|character: char| !character.is_alphanumeric())
+        .any(|token| token.eq_ignore_ascii_case("prod") || token.eq_ignore_ascii_case("production"))
 }
 
 fn percent_encode(value: &str) -> String {

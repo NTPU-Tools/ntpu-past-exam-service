@@ -72,16 +72,16 @@
 ### `POST /refresh`
 1. 若 request 帶非空的 refresh cookie：`validate_browser_mutation`（403），token = cookie。否則 token = `Authorization: Bearer <非空>`，格式不符 → `401 Invalid credentials`。（cookie 優先：同時帶 cookie 與 bearer 時走 cookie 規則。）
 2. `decode(token, "refresh")`。
-3. 種類（§3.4.2）：unknown → `401 Unknown refresh session`；legacy 且（來自 cookie 或 legacy 開關關閉）→ `401 Legacy refresh bearer migration is disabled`。
+3. 種類（§3.4.2）：managed 以外一律拒絕——legacy 形狀 → `401 Legacy refresh bearer migration is disabled`；其他 → `401 Unknown refresh session`（F-18）。
 4. 模式 A 解析使用者（`401 Invalid credentials`）。此步驟在輪替**之前**，使用者已刪除時不會消耗 session。
-5. 以 live DB 重新產生 access/refresh token（managed 沿用 `sid`，legacy 產生新 `sid`），新 `jti`。
-6. managed → 輪替；legacy → 遷移（§3.4.3）。
+5. 以 live DB 重新產生 access/refresh token（沿用 `sid`），新 `jti`。
+6. 輪替 session（§3.4.3）。
 7. `200 {"access_token","token_type":"bearer"}` + 新 refresh cookie + no-store。
-- 錯誤另含：`401 Refresh session is no longer active`、`401 Legacy refresh token has already been used`、`503 Refresh session store is unavailable`。
+- 錯誤另含：`401 Refresh session is no longer active`、`503 Refresh session store is unavailable`。
 
 ### `POST /refresh/logout`
 1. `validate_browser_mutation`（不論是否帶 cookie）。
-2. 若有 refresh cookie：`decode(token,"refresh")`；decode 失敗則忽略（不撤銷）；成功則撤銷（§3.4.3；unknown 種類 → `401 Unknown refresh session`；Redis 錯誤 → 503）。
+2. 若有 refresh cookie：`decode(token,"refresh")`；decode 失敗則忽略；managed → 撤銷 session family；legacy → 只刪 cookie；unknown 種類 → `401 Unknown refresh session`；Redis 錯誤 → 503。
 3. 刪除 refresh cookie，no-store，`200 {"status":"success"}`。
 
 ### `POST /logout`
@@ -234,7 +234,7 @@ Query：`status`、`user_id`、`course_id`、`department_id`（字串，預設�
    - `post.department_id ∈ visible_dept_ids(u)`；
    - 非 super：`status='APPROVED'` ∨ `owner_id = u.id` ∨ `department_id ∈ {d | dept_admin(u,d)}`；
    - `status` 參數：`""` 不篩；`PENDING` → `status IS DISTINCT FROM 'APPROVED'`（**包含 REJECTED 與 NULL**）；`APPROVED`；`REJECTED`；其他 → `400 Invalid post status`；
-   - `course_id`、`user_id`（= `owner_id`）、`department_id` 非空時精確比對；
+   - `course_id`、`user_id`（= `owner_id`）、`department_id` 非空時精確比對；**匿名保護（F-17）**：`user_id` 非空且不是呼叫者本人、且呼叫者不是 super user → 追加 `is_anonymous IS NOT TRUE`；
    - 必須 inner join 到存在的 course。
 4. 依 `create_time DESC` 排序，offset/limit。
 5. `200 [PostListItem, …]`（`course_name` = course.name）。

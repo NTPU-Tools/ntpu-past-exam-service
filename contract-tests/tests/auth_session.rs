@@ -13,10 +13,6 @@ fn session_key(sid: &str) -> String {
     format!("auth:refresh-session:{}", sha256_hex(sid))
 }
 
-fn legacy_used_key(token: &str) -> String {
-    format!("auth:legacy-refresh-used:{}", sha256_hex(token))
-}
-
 fn legacy_refresh_token(user: &User) -> String {
     sign(&json!({"sub": user.id, "id": user.id, "type": "refresh", "exp": now() + YEAR}))
 }
@@ -357,27 +353,38 @@ async fn cookie_takes_precedence_over_bearer() {
 }
 
 #[tokio::test]
-async fn legacy_bearer_refresh_migrates_exactly_once() {
+async fn legacy_refresh_bearer_is_rejected_after_removal() {
+    rust_only!(); // F-18: the migration window closed on 2026-11-03.
     let ctx = Ctx::new().await;
     let user = ctx.user().await;
     let legacy = legacy_refresh_token(&user);
-
-    let resp = ctx.post("/refresh").bearer(&legacy).send().await;
-    assert_token_response(&resp);
-    let managed = decode(&resp.refresh_cookie_value().unwrap());
-    assert_eq!(managed["session_version"], json!(1));
-    assert_eq!(
-        ctx.redis_get(&session_key(managed["sid"].as_str().unwrap())).await,
-        managed["jti"].as_str().map(str::to_string)
-    );
-    assert_eq!(ctx.redis_get(&legacy_used_key(&legacy)).await.as_deref(), Some("1"));
-    assert!(ctx.redis_ttl(&legacy_used_key(&legacy)).await > YEAR - 30);
-
     ctx.post("/refresh")
         .bearer(&legacy)
         .send()
         .await
-        .expect_detail(401, "Legacy refresh token has already been used");
+        .expect_detail(401, "Legacy refresh bearer migration is disabled");
+}
+
+#[tokio::test]
+async fn refresh_logout_with_a_legacy_cookie_is_idempotent() {
+    rust_only!(); // F-18: nothing server-side remains to revoke for legacy tokens.
+    let ctx = Ctx::new().await;
+    let user = ctx.user().await;
+    let legacy = legacy_refresh_token(&user);
+    ctx.post("/refresh/logout")
+        .csrf()
+        .refresh_cookie(&legacy)
+        .send()
+        .await
+        .expect(200);
+    assert_eq!(
+        ctx.redis_get(&format!(
+            "auth:legacy-refresh-used:{}",
+            sha256_hex(&legacy)
+        ))
+        .await,
+        None
+    );
 }
 
 #[tokio::test]
@@ -459,20 +466,6 @@ async fn refresh_logout_with_unknown_session_shape_is_rejected() {
         .send()
         .await
         .expect_detail(401, "Unknown refresh session");
-}
-
-#[tokio::test]
-async fn refresh_logout_burns_a_legacy_token() {
-    let ctx = Ctx::new().await;
-    let user = ctx.user().await;
-    let legacy = legacy_refresh_token(&user);
-    ctx.post("/refresh/logout").csrf().refresh_cookie(&legacy).send().await.expect(200);
-    assert_eq!(ctx.redis_get(&legacy_used_key(&legacy)).await.as_deref(), Some("1"));
-    ctx.post("/refresh")
-        .bearer(&legacy)
-        .send()
-        .await
-        .expect_detail(401, "Legacy refresh token has already been used");
 }
 
 #[tokio::test]

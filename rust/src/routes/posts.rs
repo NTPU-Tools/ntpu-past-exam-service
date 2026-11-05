@@ -88,6 +88,10 @@ async fn read_all_post(
     }
     if !user_id.is_empty() {
         builder.push(" AND p.owner_id = ").push_bind(&user_id);
+        // F-17: anonymous authorship must not be discoverable by filtering.
+        if user_id != user.id && !user.is_super() {
+            builder.push(" AND p.is_anonymous IS NOT TRUE");
+        }
     }
     if !department_id.is_empty() {
         builder

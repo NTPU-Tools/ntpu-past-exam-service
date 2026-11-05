@@ -22,7 +22,7 @@ Rust 版 MUST 支援下列所有既有變數（名稱完全相同，包含拼字
 | `ORIGIN` | 建議 | — | 前端 origin：email 連結前綴、加入允許的 auth origin 與 CORS origin |
 | `AUTH_ALLOWED_ORIGINS` | 否 | 空 | 逗號分隔；見 `03-auth.md` §3.5.3 |
 | `AUTH_COOKIE_SECURE` | 否 | `true` | refresh cookie 是否帶 `Secure` |
-| `AUTH_ALLOW_LEGACY_REFRESH_BEARER` | 否 | 未設 | 見 `03-auth.md` §3.4.4 |
+| `AUTH_ALLOW_LEGACY_REFRESH_BEARER` | 否 | 未設 | **已移除**：legacy refresh 在 Rust 版不再支援（F-18），此變數被忽略 |
 | `AUTH_RATE_LIMIT_REQUESTS` | 否 | `10` | 每帳號（subject）每視窗上限 |
 | `AUTH_RATE_LIMIT_GLOBAL_REQUESTS` | 否 | `300` | 每 IP 每視窗上限 |
 | `AUTH_RATE_LIMIT_WINDOW_SECONDS` | 否 | `60` | 固定視窗秒數 |
@@ -49,6 +49,7 @@ Rust 版 MUST 支援下列所有既有變數（名稱完全相同，包含拼字
 | `GOOGLE_USERINFO_URL` | `https://www.googleapis.com/oauth2/v1/userinfo` | 供測試覆寫 |
 | `AWS_SES_ENDPOINT` | — | 供測試覆寫 SES endpoint |
 | `LOG_TAIL_HOST` | `https://in.logs.betterstack.com` | Better Stack ingest host |
+| `EMAIL_SUBJECT_PREFIX` | 未設 | 覆寫通知信主旨前綴；未設時依 `SERVICE_NAME` 判斷是否為正式環境（F-16） |
 | `SCHEMA_CHECK` | `strict` | `strict` / `warn` / `off`，見 §2.2 |
 | `CACHE_PREFIX` | `pe-cache:v3` | 快取 key prefix，MUST 不同於 `fastapi-cache:v2` |
 | `CACHE_CLEAR_LEGACY_PREFIX` | `true` | 失效時是否一併清除 `fastapi-cache:v2:{ns}:*` |

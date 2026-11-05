@@ -97,9 +97,7 @@ header 值以**單一空白**切割，必須恰好兩段且第一段為大小寫
 | 名稱 | 值 |
 | --- | --- |
 | Session key | `auth:refresh-session:{sha256_hex(sid)}`，值 = 目前有效的 `jti`，TTL = 31 536 000 |
-| Legacy 已用 key | `auth:legacy-refresh-used:{sha256_hex(完整 token 字串)}`，值 = `"1"`，TTL = 該 legacy token 剩餘秒數 |
 | `REFRESH_SESSION_VERSION` | `1` |
-| Legacy 遷移截止 | `2026-11-03T00:00:00Z` |
 
 ### 3.4.2 判斷 token 種類
 
@@ -123,25 +121,15 @@ return 1
 ```
 回傳 0 → `401 "Refresh session is no longer active"`；Redis 錯誤 → `503 "Refresh session store is unavailable"`。
 
-**Legacy 遷移**：
-```lua
--- refresh-session-migrate-legacy
-if redis.call('EXISTS', KEYS[1]) == 1 then
-  return 0
-end
-redis.call('SET', KEYS[1], '1', 'EX', ARGV[1])
-redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3])
-return 1
-```
-KEYS = [legacy 已用 key, 新 session key]；ARGV = [legacy 剩餘秒數, 新 jti, 31536000]。回傳 0 → `401 "Legacy refresh token has already been used"`。
-legacy 剩餘秒數 = `int(exp - now)`，`<= 0` → `401 "Invalid or expired token"`。
+**撤銷**：managed → `DEL session_key`（撤銷整個 family，可防「輪替與登出競態」）；legacy → 沒有伺服器端狀態可撤銷，只刪 cookie（F-18）；unknown → `401 "Unknown refresh session"`；Redis 錯誤 → `503`。
 
-**撤銷**：managed → `DEL session_key`（撤銷整個 family，可防「輪替與登出競態」）；legacy → `SET legacy_key "1" EX 剩餘秒數 NX`；unknown → `401 "Unknown refresh session"`；Redis 錯誤 → `503`。
+### 3.4.4 Legacy refresh（已移除）
 
-### 3.4.4 Legacy bearer 開關
+生產驗證（2026-11）：`AUTH_ALLOW_LEGACY_REFRESH_BEARER` 未設定（截止日 2026-11-03 已過）、1600 個在線 session 全部是 managed、只有 62 個 `auth:legacy-refresh-used` 歷史標記。因此 Rust 版**不實作** legacy 遷移（F-18）：
 
-`AUTH_ALLOW_LEGACY_REFRESH_BEARER` 有設定 → 依布林旗標解析；未設定 → `now < 2026-11-03T00:00:00Z`。
-（目前日期已過截止日，未設定時等同關閉。是否在 Rust 版直接移除見 Q-06。）向量：`vectors/legacy_refresh_window.json`。
+- 非 managed 且形狀為 legacy（`sid`、`jti` 皆空）→ `401 {"detail":"Legacy refresh bearer migration is disabled"}`（訊息與參考實作相同）。
+- 其他非 managed 形狀 → `401 {"detail":"Unknown refresh session"}`。
+- `/refresh/logout` 收到 legacy token 時只刪 cookie，回 `200`；不寫入 `auth:legacy-refresh-used:*`。
 
 ## 3.5 Cookie、Origin 與 CSRF
 

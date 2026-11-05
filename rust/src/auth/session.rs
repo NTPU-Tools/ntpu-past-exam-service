@@ -1,4 +1,3 @@
-use chrono::Utc;
 use redis::aio::ConnectionManager;
 use redis::Script;
 use serde_json::Value;
@@ -8,7 +7,6 @@ use crate::config::REFRESH_SESSION_VERSION;
 use crate::error::{ApiError, ApiResult};
 
 const REFRESH_SESSION_PREFIX: &str = "auth:refresh-session:";
-const LEGACY_REFRESH_PREFIX: &str = "auth:legacy-refresh-used:";
 
 const ROTATE_SCRIPT: &str = r#"
 -- refresh-session-rotate
@@ -20,26 +18,12 @@ redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
 return 1
 "#;
 
-const MIGRATE_LEGACY_SCRIPT: &str = r#"
--- refresh-session-migrate-legacy
-if redis.call('EXISTS', KEYS[1]) == 1 then
-  return 0
-end
-redis.call('SET', KEYS[1], '1', 'EX', ARGV[1])
-redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3])
-return 1
-"#;
-
 fn sha256_hex(value: &str) -> String {
     hex::encode(Sha256::digest(value.as_bytes()))
 }
 
 pub fn session_key(session_id: &str) -> String {
     format!("{REFRESH_SESSION_PREFIX}{}", sha256_hex(session_id))
-}
-
-pub fn legacy_key(token: &str) -> String {
-    format!("{LEGACY_REFRESH_PREFIX}{}", sha256_hex(token))
 }
 
 pub fn is_managed(payload: &Value) -> bool {
@@ -67,18 +51,6 @@ pub fn is_legacy(payload: &Value) -> bool {
         }
     }
     falsy(payload.get("sid")) && falsy(payload.get("jti"))
-}
-
-pub fn token_ttl(payload: &Value) -> ApiResult<i64> {
-    let expires_at = payload
-        .get("exp")
-        .and_then(|value| value.as_f64())
-        .ok_or_else(|| ApiError::unauthorized("Invalid refresh token expiry"))?;
-    let ttl = expires_at as i64 - Utc::now().timestamp();
-    if ttl <= 0 {
-        return Err(ApiError::unauthorized("Invalid or expired token"));
-    }
-    Ok(ttl)
 }
 
 fn store_unavailable() -> ApiError {
@@ -132,35 +104,9 @@ pub async fn rotate(
     Ok(())
 }
 
-pub async fn migrate_legacy(
-    redis: &ConnectionManager,
-    legacy_token: &str,
-    legacy_ttl: i64,
-    session_id: &str,
-    refresh_jti: &str,
-    refresh_ttl: i64,
-) -> ApiResult<()> {
-    let mut connection = redis.clone();
-    let migrated: i64 = Script::new(MIGRATE_LEGACY_SCRIPT)
-        .key(legacy_key(legacy_token))
-        .key(session_key(session_id))
-        .arg(legacy_ttl)
-        .arg(refresh_jti)
-        .arg(refresh_ttl)
-        .invoke_async(&mut connection)
-        .await
-        .map_err(|_| store_unavailable())?;
-    if migrated != 1 {
-        return Err(ApiError::unauthorized(
-            "Legacy refresh token has already been used",
-        ));
-    }
-    Ok(())
-}
-
-pub async fn revoke(redis: &ConnectionManager, payload: &Value, token: &str) -> ApiResult<()> {
-    let mut connection = redis.clone();
+pub async fn revoke(redis: &ConnectionManager, payload: &Value) -> ApiResult<()> {
     if is_managed(payload) {
+        let mut connection = redis.clone();
         let session_id = payload["sid"].as_str().unwrap_or_default();
         let _: i64 = redis::cmd("DEL")
             .arg(session_key(session_id))
@@ -170,16 +116,8 @@ pub async fn revoke(redis: &ConnectionManager, payload: &Value, token: &str) -> 
         return Ok(());
     }
     if is_legacy(payload) {
-        let ttl = token_ttl(payload)?;
-        let _: Option<String> = redis::cmd("SET")
-            .arg(legacy_key(token))
-            .arg("1")
-            .arg("EX")
-            .arg(ttl)
-            .arg("NX")
-            .query_async(&mut connection)
-            .await
-            .map_err(|_| store_unavailable())?;
+        // Legacy sessions were never stored server-side after the migration
+        // window closed (2026-11-03); deleting the cookie is all that remains.
         return Ok(());
     }
     Err(ApiError::unauthorized("Unknown refresh session"))

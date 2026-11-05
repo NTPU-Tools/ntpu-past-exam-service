@@ -30,8 +30,8 @@ healthcheck` (used by the Docker healthcheck).
 ## Test
 
 ```bash
-cargo test                        # vector-driven unit tests (14)
-cd ../contract-tests && cargo test # full black-box contract suite (160)
+cargo test                        # vector-driven unit tests (13)
+cd ../contract-tests && cargo test # full black-box contract suite (161)
 ```
 
 The contract suite asserts the documented behaviour against this implementation
@@ -49,6 +49,16 @@ Additional settings: `PORT`, `BIND_ADDRESS`, `DATABASE_URL`,
 `schema_check=strict` (default) refuses to start unless `alembic_version`
 equals the schema head the code was written for; Alembic still owns the schema
 until the Python implementation is retired.
+
+## Deliberate fixes validated against production
+
+- F-16: notification subjects no longer get the 「測試環境 - 」 prefix when
+  `SERVICE_NAME` is `oracle-production-coolify`; override with
+  `EMAIL_SUBJECT_PREFIX`.
+- F-17: `GET /posts?user_id=X` no longer exposes X's anonymous posts to other
+  users.
+- F-18: the legacy refresh-token migration path (window closed 2026-11-03) is
+  gone; legacy tokens are rejected and logout only clears the cookie.
 
 ## Known gaps
 

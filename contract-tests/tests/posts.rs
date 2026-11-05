@@ -392,7 +392,7 @@ async fn list_filters_ordering_and_shape() {
     assert_eq!(body[2]["owner_id"], json!(author.id));
 
     assert_eq!(ids(&list(&ctx, &viewer, &[("course_id", &course_b.id)]).await), vec![other_course.id.clone()]);
-    let by_author = ids(&list(&ctx, &viewer, &[("department_id", &dept.id), ("user_id", &author.id)]).await);
+    let by_author = ids(&list(&ctx, &author, &[("department_id", &dept.id), ("user_id", &author.id)]).await);
     assert_eq!(by_author, vec![new.id.clone(), old.id.clone()]);
 
     let page = ids(&list(&ctx, &viewer, &[("department_id", &dept.id), ("skip", "1"), ("limit", "1")]).await);
@@ -660,4 +660,40 @@ async fn delete_by_super_user_and_permission_errors() {
         .await
         .expect_detail(403, "Forbidden");
     ctx.delete(&format!("/posts/{}", post.id)).auth(&root).send().await.expect(200);
+}
+
+#[tokio::test]
+async fn anonymous_posts_are_not_discoverable_through_the_user_filter() {
+    rust_only!(); // F-17: the reference returns anonymous posts for any user_id filter.
+    let ctx = Ctx::new().await;
+    let author = ctx.user().await;
+    let stranger = ctx.user().await;
+    let root = ctx.super_user().await;
+    let dept = ctx.department(true).await;
+    let course = ctx.course(&dept).await;
+    let named = ctx.seed_post(&course, &author, "APPROVED").await;
+    let anonymous = ctx
+        .create_post(
+            &course,
+            &author,
+            NewPost {
+                anonymous: true,
+                ..Default::default()
+            },
+        )
+        .await;
+    let query = [
+        ("department_id", dept.id.as_str()),
+        ("user_id", author.id.as_str()),
+    ];
+
+    let seen_by_stranger = ids(&list(&ctx, &stranger, &query).await);
+    assert_eq!(seen_by_stranger, vec![named.id.clone()]);
+
+    let seen_by_author = ids(&list(&ctx, &author, &query).await);
+    assert!(seen_by_author.contains(&named.id));
+    assert!(seen_by_author.contains(&anonymous.id));
+
+    let seen_by_super = ids(&list(&ctx, &root, &query).await);
+    assert!(seen_by_super.contains(&anonymous.id));
 }

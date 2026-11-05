@@ -52,17 +52,17 @@
 | F-13 | Google 回應缺 `email`/`name` → 500 | MAY 回 `403 Forbidden` | 單元測試 |
 | F-14 | `GET /openapi.json` 公開完整 API schema（`/docs`、`/redoc` 已關閉，推測為疏漏） | 不提供，`404` | `platform::openapi_schema_is_not_exposed`（rust only） |
 | F-15 | log：設定 Better Stack 時不寫本機 log、預設寫 stderr、422 log 的 `env` 誤用 `R2_BUCKET_NAME`、500 沒有 request log | 依 `02-runtime.md` §2.9 Rust 要求 | 單元測試 |
+| F-16 | email 主旨在 `SERVICE_NAME != "PROD"` 時加「測試環境 - 」；正式環境實測 `SERVICE_NAME=oracle-production-coolify` → **每封信都有測試前綴** | `EMAIL_SUBJECT_PREFIX` 可覆寫；否則以 `SERVICE_NAME` 的 `prod`/`production` token 判斷正式環境 | `tests::email_rendering_vectors`（含 `is_production`） |
+| F-17 | `GET /posts?user_id=X` 列出 X 的匿名 post，可反推作者（正式環境實測 3 筆） | `user_id` 篩選對非本人、非 super user 排除匿名 post | `posts::anonymous_posts_are_not_discoverable_through_the_user_filter`（rust only） |
+| F-18 | legacy refresh bearer 遷移已在 2026-11-03 截止；正式環境 1600 個 session 全為 managed、flag 未設 | 移除 legacy 遷移與 `auth:legacy-refresh-used:*`；legacy 形狀回 401、logout 只刪 cookie | `auth_session::legacy_refresh_bearer_is_rejected_after_removal`、`refresh_logout_with_a_legacy_cookie_is_idempotent`（rust only） |
 
 ## Q — 待決定（預設保留現況）
 
 | 代號 | 問題 | 建議 |
 | --- | --- | --- |
-| Q-01 | email 主旨在 `SERVICE_NAME != "PROD"` 時加「測試環境 - 」，但正式環境 `SERVICE_NAME=oracle-production` → **正式環境的信都有測試前綴** | 改用明確的 `EMAIL_SUBJECT_PREFIX`，或把判斷改成 `SERVICE_NAME` 含 `prod` |
-| Q-02 | `GET /posts?user_id=X` 會列出 X 的匿名 post（owner_id 雖遮蔽，但可推得作者）——隱私洩漏 | `user_id` 篩選對非本人/非管理員排除匿名 post |
 | Q-03 | 寄給多位管理員的信放在同一個 `To:`，彼此看得到 email | 改為逐一寄送或用 BCC |
 | Q-04 | P-04：作者不能刪自己的考古題 | 確認是否為刻意設計 |
 | Q-05 | P-01：`visible-check` 語意 | 確認前端是否仍使用（目前前端程式碼未呼叫） |
-| Q-06 | legacy refresh bearer 遷移已過截止日（2026-11-03） | Rust 版直接移除 legacy 路徑（unknown/legacy 一律 401），可簡化程式 |
 | Q-07 | `is_migrate` 由客戶端任意設定（影響前端顯示作者） | 限 super user 可設定 |
 | Q-08 | P-10：公開系所也可送加入申請 | 確認 |
 | Q-09 | P-11：管理員可互相降級、可把 pending 成員設為管理員 | 確認 |
@@ -73,5 +73,7 @@
 | Q-14 | thread 管理員可刪除但不能編輯他人 thread | 確認 |
 | Q-15 | `/departments/{id}/visible-check`、`admin-check`、`/users/status/*`、`/users/admin/*`、`/logout` 等前端已不使用的 endpoint 是否保留 | 保留到 P7 後依 access log 決定 |
 | Q-16 | 時間格式是否統一 | 前端 `parseUTC` 兩種都接受；統一需改測試，維持現況 |
+
+> Q-01、Q-02、Q-06 已於 2026-11 以 oracle 正式環境驗證並轉為 F-16、F-17、F-18。
 | Q-17 | LMS 頁面實際編碼與 HTML 結構需以真實帳號驗證（fixtures 為依 parser 邏輯合成） | P3 時以測試帳號錄製真實回應替換 fixtures |
 | Q-18 | 系所管理員收到的 E1 信件連結使用 `ORIGIN`，未設定時參考實作會產生 `None/admin/...` | Rust 未設定 `ORIGIN` 時啟動 log warning |

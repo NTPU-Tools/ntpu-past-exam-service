@@ -7,7 +7,6 @@ use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use chrono::Utc;
 use serde_json::{json, Value};
 use unicode_general_category::get_general_category;
 use unicode_general_category::GeneralCategory;
@@ -113,52 +112,34 @@ async fn refresh(State(state): State<Arc<AppState>>, headers: HeaderMap) -> ApiR
     let legacy = session::is_legacy(&payload);
 
     if !managed {
-        if !legacy {
-            return Err(ApiError::unauthorized("Unknown refresh session"));
-        }
-        if cookie_token.is_some() || !state.config.legacy_refresh_bearer_enabled(Utc::now()) {
+        // F-18: the legacy bearer migration window closed on 2026-11-03.
+        if legacy {
             return Err(ApiError::unauthorized(
                 "Legacy refresh bearer migration is disabled",
             ));
         }
+        return Err(ApiError::unauthorized("Unknown refresh session"));
     }
 
     let user = crate::auth::extractor::resolve_from_claims(&state, &payload).await?;
-    let existing_session = if managed {
-        payload
-            .get("sid")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-    } else {
-        None
-    };
+    let existing_session = payload
+        .get("sid")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     let admin_ids = authz::admin_department_ids(&state, &user).await?;
     let tokens = jwt::build_tokens(&state.config, &user, &admin_ids, existing_session)?;
 
-    if managed {
-        session::rotate(
-            &state.redis,
-            &tokens.session_id,
-            payload
-                .get("jti")
-                .and_then(Value::as_str)
-                .unwrap_or_default(),
-            &tokens.refresh_jti,
-            session_ttl(),
-        )
-        .await?;
-    } else {
-        let legacy_ttl = session::token_ttl(&payload)?;
-        session::migrate_legacy(
-            &state.redis,
-            &token,
-            legacy_ttl,
-            &tokens.session_id,
-            &tokens.refresh_jti,
-            session_ttl(),
-        )
-        .await?;
-    }
+    session::rotate(
+        &state.redis,
+        &tokens.session_id,
+        payload
+            .get("jti")
+            .and_then(Value::as_str)
+            .unwrap_or_default(),
+        &tokens.refresh_jti,
+        session_ttl(),
+    )
+    .await?;
 
     Ok(token_response(
         &state,
@@ -174,7 +155,7 @@ async fn refresh_logout(
     cookie::validate_browser_mutation(&state.config, &headers)?;
     if let Some(token) = cookie::request_cookie(&headers, REFRESH_COOKIE_NAME) {
         if let Ok(payload) = jwt::decode(&state.config, &token, "refresh") {
-            session::revoke(&state.redis, &payload, &token).await?;
+            session::revoke(&state.redis, &payload).await?;
         }
     }
     Ok(deleted_session_response(&state))
