@@ -1,0 +1,64 @@
+# Coolify "Docker Compose" build pack for the Rust backend.
+#
+# Every deployment runs Alembic from the Python image first; the Rust API only
+# starts once that exits 0. A failed migration leaves the API down instead of
+# serving against a half-migrated schema. See docs/rust-rewrite/09-deployment.md.
+
+x-database: &database
+  DATABASE_HOST: ${DATABASE_HOST}
+  DATABASE_PORT: ${DATABASE_PORT:-5432}
+  DATABASE_USERNAME: ${DATABASE_USERNAME}
+  DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+  DATABASE: ${DATABASE}
+
+services:
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["sh", "-c", "python -m alembic upgrade head && python -m alembic check"]
+    environment:
+      <<: *database
+      DATABASE_DRIVER: ${DATABASE_DRIVER:-postgresql+psycopg}
+    restart: "no"
+    networks:
+      - coolify
+
+  api:
+    build:
+      context: ./rust
+      dockerfile: Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *database
+      PORT: 8080
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      R2_URL: ${R2_URL}
+      R2_ACCESS_KEY: ${R2_ACCESS_KEY}
+      R2_ACCESS_TOKEN: ${R2_ACCESS_TOKEN}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME}
+      R2_FILE_PATH: ${R2_FILE_PATH}
+      HASH_KEY: ${HASH_KEY}
+      ORIGIN: ${ORIGIN}
+      AWS_EMAIL_SENDER: ${AWS_EMAIL_SENDER}
+      AWS_ACCESS_KEY: ${AWS_ACCESS_KEY}
+      AWS_ACCESS_SECRET: ${AWS_ACCESS_SECRET}
+      GOOGLE_SERVICE_CLIENT_ID: ${GOOGLE_SERVICE_CLIENT_ID}
+      GOOGLE_SERVICE_SERCET: ${GOOGLE_SERVICE_SERCET}
+      LOG_TAIL_SOURCE_KEY: ${LOG_TAIL_SOURCE_KEY:-}
+      SERVICE_NAME: ${SERVICE_NAME}
+      COMMIT_SHA: ${SOURCE_COMMIT:-unknown}
+    restart: unless-stopped
+    networks:
+      coolify:
+        # Caddy reaches the API by this name (past-exam-api.ntpu.cc upstream).
+        aliases:
+          - past-exam-rust-api
+
+networks:
+  coolify:
+    external: true

@@ -10,7 +10,6 @@ pub const ACCESS_TOKEN_EXPIRE_SECONDS: i64 = 900;
 pub const REFRESH_SESSION_VERSION: i64 = 1;
 pub const CSRF_HEADER_NAME: &str = "x-csrf-protection";
 pub const CSRF_HEADER_VALUE: &str = "1";
-pub const SCHEMA_HEAD: &str = "4d7c2a91b6e3";
 
 pub fn load_dotenv() {
     // Matches python-dotenv `load_dotenv()`: existing environment wins.

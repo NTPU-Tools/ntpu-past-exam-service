@@ -73,8 +73,8 @@ DB 層多數欄位沒有 default（預設值存在於 SQLAlchemy model），Rust
 
 ## 5.6 Schema 所有權
 
-- **P1–P6**：Alembic（Python）仍是 schema owner；部署腳本先跑 `alembic upgrade head` / `alembic check`，Rust 只做版本檢查。
-- **P7**（Python 退役）：在 `rust/migrations/` 建立 sqlx migrations：
+- **P1–P6**：Alembic（Python）仍是 schema owner；部署時由 `docker-compose.coolify.yml` 的 `migrate` service 先跑 `alembic upgrade head` / `alembic check`，Rust 只做版本檢查（`09-deployment.md`）。
+- **P7**（Python 退役，選擇性）：繼續使用 `migrate` service 跑 Alembic 即可，不一定要遷移。若要改由 Rust 擁有 schema，再於 `rust/migrations/` 建立 sqlx migrations：
   1. `0001_baseline.sql` = `schema.sql`（不含 `alembic_version`）。
   2. 啟動 migrator 時：若 `alembic_version.version_num = '4d7c2a91b6e3'` 且 `_sqlx_migrations` 不存在 → 將 baseline 標記為已套用（不執行），之後的 migration 照常執行。
   3. 之後的 schema 變更（例如 Q-18 的唯一約束）只透過 sqlx migration。

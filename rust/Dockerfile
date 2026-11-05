@@ -8,6 +8,7 @@ RUN mkdir src && printf 'fn main() {}\n' > src/main.rs \
     && cargo build --release --locked \
     && rm -rf src
 
+COPY schema_revisions.txt ./
 COPY src ./src
 COPY assets ./assets
 RUN touch src/main.rs && cargo build --release --locked

@@ -19,10 +19,11 @@ use sqlx::PgPool;
 use tower_http::catch_panic::CatchPanicLayer;
 
 use crate::cache::Cache;
-use crate::config::{Config, SCHEMA_HEAD};
+use crate::config::Config;
 use crate::error::ApiError;
 use crate::mail::Mailer;
 use crate::routes;
+use crate::schema::{self, SchemaStatus};
 use crate::storage::Storage;
 
 const STATIC_CORS_ORIGINS: [&str; 6] = [
@@ -90,21 +91,24 @@ impl AppState {
                 .fetch_optional(&self.db)
                 .await
             {
-                Ok(Some(version)) => {
-                    if version == SCHEMA_HEAD {
-                        return Ok(());
-                    }
-                    let message = format!(
-                        "database schema version {version} does not match expected {SCHEMA_HEAD}"
-                    );
-                    if self.config.schema_check == "warn" {
-                        tracing::warn!("{message}");
-                        return Ok(());
-                    }
-                    bail!("{message}");
-                }
-                Ok(None) => {
-                    let message = "alembic_version table is empty";
+                Ok(version) => {
+                    let message = match schema::classify(version.as_deref()) {
+                        SchemaStatus::Current => return Ok(()),
+                        SchemaStatus::Ahead => {
+                            tracing::warn!(
+                                version = version.as_deref().unwrap_or_default(),
+                                head = schema::head(),
+                                "database schema is newer than this build; continuing"
+                            );
+                            return Ok(());
+                        }
+                        SchemaStatus::Behind => format!(
+                            "database schema {} is behind {}; run alembic upgrade head first",
+                            version.as_deref().unwrap_or_default(),
+                            schema::head()
+                        ),
+                        SchemaStatus::Missing => "alembic_version table is empty".to_string(),
+                    };
                     if self.config.schema_check == "warn" {
                         tracing::warn!("{message}");
                         return Ok(());

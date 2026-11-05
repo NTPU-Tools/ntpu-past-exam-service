@@ -16,6 +16,7 @@ Rust 實作位於 [`rust/`](../../rust/)，已通過本規格的全部契約測�
 | `docs/rust-rewrite/06-integrations.md` | R2（S3）、SES email、Redis 快取與失效矩陣、Redis key 格式 |
 | `docs/rust-rewrite/07-deviations.md` | 現行行為中的怪異點/bug：哪些**必須保留**、哪些 Rust **刻意修正**、哪些**待決定** |
 | `docs/rust-rewrite/08-testing.md` | 測試策略、如何執行、**功能覆蓋矩陣**（每個功能 → 對應測試） |
+| `docs/rust-rewrite/09-deployment.md` | Coolify 部署、Alembic migration 流程、啟動時 schema 相容性檢查、runbook |
 | `docs/rust-rewrite/schema.sql` | 目前 PostgreSQL schema（Alembic head `4d7c2a91b6e3`） |
 | `docs/rust-rewrite/assets/` | 通知信 HTML 模板（從現行程式碼原樣抽出） |
 | `contract-tests/` | 黑箱 HTTP 契約測試（Rust crate），同時對現行 Python 後端與 Rust 後端執行 |

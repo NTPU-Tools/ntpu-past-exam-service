@@ -60,8 +60,8 @@ Rust 版 MUST 支援下列所有既有變數（名稱完全相同，包含拼字
 1. 載入設定；`HASH_KEY` 缺失 → 以非零碼結束。
 2. 建立 PostgreSQL 連線池、Redis client、S3 client、（可選）SES client。Redis 可延遲連線；Redis 不可用時服務仍需啟動（各功能的失敗行為見 `03-auth.md`、`06-integrations.md`）。
 3. Schema 檢查（`SCHEMA_CHECK`）：
-   - `strict`：查詢 `SELECT version_num FROM alembic_version`，MUST 等於 `4d7c2a91b6e3`（或規格日後更新的 head），否則 log error 並以非零碼結束。DB 無法連線時最多重試 30 秒。
-   - `warn`：不一致只 log warning。`off`：略過。
+   - `strict`：查詢 `SELECT version_num FROM alembic_version`，依 `rust/schema_revisions.txt` 判定（見 `09-deployment.md` §9.2）：等於 head → 啟動；較舊的已知 revision 或空表 → log error 並以非零碼結束；未知 revision（DB 較新）→ warning 後啟動。DB 無法連線時最多重試 30 秒。
+   - `warn`：所有不一致都只 log warning。`off`：略過。
    - 參考實作的 production 啟動腳本會先跑 `alembic upgrade head && alembic check`；Rust 版 MUST NOT 自行 migrate。
 4. 監聽 `BIND_ADDRESS:PORT`。
 5. 收到 SIGTERM/SIGINT 時 SHOULD 停止接受新連線並等待進行中的 request（最多 10 秒）。

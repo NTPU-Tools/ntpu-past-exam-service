@@ -355,3 +355,66 @@ fn timestamp_serialization_vectors() {
         "\"2026-01-02T03:04:05Z\""
     );
 }
+
+fn quoted_value(line: &str) -> Option<String> {
+    let value = line.split_once('=')?.1.trim();
+    let quote = value.chars().next().filter(|c| *c == '"' || *c == '\'')?;
+    Some(value[1..].split(quote).next()?.to_string())
+}
+
+#[test]
+fn schema_revisions_match_the_alembic_history() {
+    let versions = format!("{}/../alembic/versions", env!("CARGO_MANIFEST_DIR"));
+    let mut parent_of = std::collections::HashMap::new();
+    for entry in fs::read_dir(&versions).expect("read alembic/versions") {
+        let path = entry.unwrap().path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("py") {
+            continue;
+        }
+        let source = fs::read_to_string(&path).unwrap();
+        let field = |name: &str| {
+            source
+                .lines()
+                .find(|line| {
+                    line.starts_with(name)
+                        && line[name.len()..].trim_start().starts_with([':', '='])
+                })
+                .unwrap_or_else(|| panic!("{} has no {name}", path.display()))
+                .to_string()
+        };
+        let revision = quoted_value(&field("revision")).unwrap();
+        parent_of.insert(revision, quoted_value(&field("down_revision")));
+    }
+
+    let mut chain = Vec::new();
+    let mut current: Option<String> = None;
+    while let Some(next) = parent_of
+        .iter()
+        .find(|(_, down)| **down == current)
+        .map(|(revision, _)| revision.clone())
+    {
+        chain.push(next.clone());
+        current = Some(next);
+    }
+    assert_eq!(
+        chain.len(),
+        parent_of.len(),
+        "alembic history is not linear"
+    );
+    assert_eq!(
+        crate::schema::revisions().collect::<Vec<_>>(),
+        chain,
+        "rust/schema_revisions.txt is stale; run python scripts/sync_schema_revisions.py"
+    );
+}
+
+#[test]
+fn schema_status_only_rejects_databases_behind_the_build() {
+    use crate::schema::{classify, head, revisions, SchemaStatus};
+    let oldest = revisions().next().unwrap();
+    assert_eq!(head(), "4d7c2a91b6e3");
+    assert_eq!(classify(Some(head())), SchemaStatus::Current);
+    assert_eq!(classify(Some(oldest)), SchemaStatus::Behind);
+    assert_eq!(classify(Some("ffffffffffff")), SchemaStatus::Ahead);
+    assert_eq!(classify(None), SchemaStatus::Missing);
+}

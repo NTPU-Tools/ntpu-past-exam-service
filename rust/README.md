@@ -30,7 +30,7 @@ healthcheck` (used by the Docker healthcheck).
 ## Test
 
 ```bash
-cargo test                        # vector-driven unit tests (13)
+cargo test                        # unit tests (15)
 cd ../contract-tests && cargo test # full black-box contract suite (161)
 ```
 
@@ -46,9 +46,16 @@ Additional settings: `PORT`, `BIND_ADDRESS`, `DATABASE_URL`,
 `GOOGLE_USERINFO_URL`, `AWS_SES_ENDPOINT`, `LOG_TAIL_HOST`, `SCHEMA_CHECK`,
 `CACHE_PREFIX`, `CACHE_CLEAR_LEGACY_PREFIX`, `MAX_REQUEST_BODY_BYTES`.
 
-`schema_check=strict` (default) refuses to start unless `alembic_version`
-equals the schema head the code was written for; Alembic still owns the schema
-until the Python implementation is retired.
+Alembic owns the schema; this service never migrates. `SCHEMA_CHECK=strict`
+(default) refuses to start only when `alembic_version` is an *older* revision
+listed in `schema_revisions.txt` (or missing). An unknown, newer revision logs a
+warning and starts, so an older build can restart after an expand-only
+migration. After adding a migration, run
+`python scripts/sync_schema_revisions.py`; `cargo test` fails until you do.
+
+Production deploys use `docker-compose.coolify.yml`: a Python `migrate`
+service runs `alembic upgrade head` and the API starts only after it exits 0.
+See `docs/rust-rewrite/09-deployment.md`.
 
 ## Deliberate fixes validated against production
 

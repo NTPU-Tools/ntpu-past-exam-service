@@ -10,4 +10,4 @@ __pycache__
 *.pyc
 tests
 contract-tests/target
-rust/target
+rust

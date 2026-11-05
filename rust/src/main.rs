@@ -11,6 +11,7 @@ mod json_fmt;
 mod logging;
 mod mail;
 mod routes;
+mod schema;
 mod storage;
 
 #[cfg(test)]
