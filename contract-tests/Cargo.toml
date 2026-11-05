@@ -1,0 +1,25 @@
+[package]
+name = "past-exam-contract-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Black-box HTTP contract tests for the NTPU Past Exam backend (Python reference and Rust rewrite)"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+base64 = "0.22"
+bcrypt = "0.17"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+hex = "0.4"
+jsonwebtoken = "9"
+rand = "0.8"
+redis = { version = "0.27", default-features = false, features = ["tokio-comp", "script"] }
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4"] }
+uuid = { version = "1", features = ["v4"] }
