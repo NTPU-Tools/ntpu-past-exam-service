@@ -1,4 +1,4 @@
-# Backend stack: a one-shot Alembic migration, then the Rust API.
+# Backend stack: a one-shot SQLx migration, then the Rust API.
 #
 #   docker compose --env-file .env up -d --build
 #
@@ -16,12 +16,11 @@ x-database: &database
 services:
   migrate:
     build:
-      context: .
+      context: ./rust
       dockerfile: Dockerfile
-    command: ["sh", "-c", "python -m alembic upgrade head && python -m alembic check"]
+    command: ["/usr/local/bin/past-exam-service", "migrate"]
     environment:
       <<: *database
-      DATABASE_DRIVER: ${DATABASE_DRIVER:-postgresql+psycopg}
     networks:
       - backend
     restart: "no"

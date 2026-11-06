@@ -87,28 +87,44 @@ impl AppState {
         }
         let mut attempts = 0;
         loop {
-            match sqlx::query_scalar::<_, String>("SELECT version_num FROM alembic_version LIMIT 1")
-                .fetch_optional(&self.db)
+            match sqlx::query_as::<_, (i64, bool)>("SELECT version, success FROM _sqlx_migrations")
+                .fetch_all(&self.db)
                 .await
             {
-                Ok(version) => {
-                    let message = match schema::classify(version.as_deref()) {
+                Ok(rows) => {
+                    let applied: Vec<i64> = rows
+                        .into_iter()
+                        .filter(|(_, success)| *success)
+                        .map(|(version, _)| version)
+                        .collect();
+                    let message = match schema::classify(&applied) {
                         SchemaStatus::Current => return Ok(()),
                         SchemaStatus::Ahead => {
                             tracing::warn!(
-                                version = version.as_deref().unwrap_or_default(),
-                                head = schema::head(),
-                                "database schema is newer than this build; continuing"
+                                applied = ?applied,
+                                expected = ?schema::expected_versions(),
+                                "database has migrations newer than this build; continuing"
                             );
                             return Ok(());
                         }
                         SchemaStatus::Behind => format!(
-                            "database schema {} is behind {}; run alembic upgrade head first",
-                            version.as_deref().unwrap_or_default(),
-                            schema::head()
+                            "database is missing migrations {:?}; run `past-exam-service migrate`",
+                            missing_versions(&applied)
                         ),
-                        SchemaStatus::Missing => "alembic_version table is empty".to_string(),
+                        SchemaStatus::Missing => {
+                            "database has no applied migrations; run `past-exam-service migrate`"
+                                .to_string()
+                        }
                     };
+                    if self.config.schema_check == "warn" {
+                        tracing::warn!("{message}");
+                        return Ok(());
+                    }
+                    bail!("{message}");
+                }
+                Err(error) if is_undefined_table(&error) => {
+                    let message =
+                        "database has no _sqlx_migrations table; run `past-exam-service migrate`";
                     if self.config.schema_check == "warn" {
                         tracing::warn!("{message}");
                         return Ok(());
@@ -125,6 +141,18 @@ impl AppState {
             }
         }
     }
+}
+
+fn missing_versions(applied: &[i64]) -> Vec<i64> {
+    let applied: std::collections::BTreeSet<i64> = applied.iter().copied().collect();
+    schema::expected_versions()
+        .into_iter()
+        .filter(|version| !applied.contains(version))
+        .collect()
+}
+
+fn is_undefined_table(error: &sqlx::Error) -> bool {
+    matches!(error, sqlx::Error::Database(db) if db.code().as_deref() == Some("42P01"))
 }
 
 pub fn router(state: Arc<AppState>) -> Router {

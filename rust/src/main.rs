@@ -30,8 +30,18 @@ async fn main() -> anyhow::Result<()> {
     if mode == "healthcheck" {
         return healthcheck().await;
     }
+    if mode == "migrate" {
+        config::load_dotenv();
+        let url = config::database_url_from_env()?;
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&url)
+            .await?;
+        schema::MIGRATOR.run(&pool).await?;
+        return Ok(());
+    }
     if mode != "serve" {
-        anyhow::bail!("unknown command {mode:?}; expected `serve` or `healthcheck`");
+        anyhow::bail!("unknown command {mode:?}; expected `serve`, `migrate` or `healthcheck`");
     }
 
     config::load_dotenv();

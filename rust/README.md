@@ -26,7 +26,7 @@ cargo run -- serve
 Health check: `GET /ping`. The binary also supports `past-exam-service
 healthcheck` (used by the Docker healthcheck).
 
-The repository-root `docker-compose.yml` runs a one-shot Alembic migration and
+The repository-root `docker-compose.yml` runs a one-shot SQLx migration and
 then starts the API:
 
 ```bash
@@ -36,7 +36,7 @@ docker compose --env-file .env up -d --build
 ## Test
 
 ```bash
-cargo test                        # unit tests (15)
+cargo test                        # unit tests (14)
 cd ../contract-tests && cargo test # full black-box contract suite (161)
 ```
 
@@ -51,12 +51,10 @@ All legacy variables are honoured. Additional settings: `PORT`, `BIND_ADDRESS`,
 `GOOGLE_USERINFO_URL`, `AWS_SES_ENDPOINT`, `LOG_TAIL_HOST`, `SCHEMA_CHECK`,
 `CACHE_PREFIX`, `CACHE_CLEAR_LEGACY_PREFIX`, `MAX_REQUEST_BODY_BYTES`.
 
-Alembic owns the schema; this service never migrates. `SCHEMA_CHECK=strict`
-(default) refuses to start only when `alembic_version` is an *older* revision
-listed in `schema_revisions.txt` (or missing). An unknown, newer revision logs a
-warning and starts, so an older build can restart after an expand-only
-migration. After adding a migration, run
-`python scripts/sync_schema_revisions.py`; `cargo test` fails until you do.
+SQLx owns the schema. `past-exam-service migrate` applies `rust/migrations/`;
+`serve` refuses to start when `_sqlx_migrations` is missing or behind (unless
+`SCHEMA_CHECK=warn` or `off`). Applied versions newer than this build only log a
+warning, so an older build can restart after an expand-only migration.
 
 ## Behaviour notes
 

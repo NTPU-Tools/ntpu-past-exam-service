@@ -117,26 +117,28 @@ pub struct Config {
     pub max_request_body: usize,
 }
 
+pub fn database_url_from_env() -> anyhow::Result<String> {
+    if let Some(url) = var("DATABASE_URL") {
+        return Ok(url);
+    }
+    let host = required("DATABASE_HOST")?;
+    let port = var("DATABASE_PORT").unwrap_or_else(|| "5432".into());
+    let user = required("DATABASE_USERNAME")?;
+    let password = var("DATABASE_PASSWORD").unwrap_or_default();
+    let database = required("DATABASE")?;
+    Ok(format!(
+        "postgres://{}:{}@{}:{}/{}",
+        percent_encode(&user),
+        percent_encode(&password),
+        host,
+        port,
+        database
+    ))
+}
+
 impl Config {
     pub fn from_env() -> anyhow::Result<Config> {
-        let database_url = match var("DATABASE_URL") {
-            Some(url) => url,
-            None => {
-                let host = required("DATABASE_HOST")?;
-                let port = var("DATABASE_PORT").unwrap_or_else(|| "5432".into());
-                let user = required("DATABASE_USERNAME")?;
-                let password = var("DATABASE_PASSWORD").unwrap_or_default();
-                let database = required("DATABASE")?;
-                format!(
-                    "postgres://{}:{}@{}:{}/{}",
-                    percent_encode(&user),
-                    percent_encode(&password),
-                    host,
-                    port,
-                    database
-                )
-            }
-        };
+        let database_url = database_url_from_env()?;
 
         let redis_host = required("REDIS_HOST")?;
         let redis_port = var("REDIS_PORT").unwrap_or_else(|| "6379".into());
