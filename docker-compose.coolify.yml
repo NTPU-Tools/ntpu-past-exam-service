@@ -51,7 +51,6 @@ services:
       GOOGLE_SERVICE_SERCET: ${GOOGLE_SERVICE_SERCET}
       LOG_TAIL_SOURCE_KEY: ${LOG_TAIL_SOURCE_KEY:-}
       SERVICE_NAME: ${SERVICE_NAME}
-      COMMIT_SHA: ${SOURCE_COMMIT:-unknown}
     restart: unless-stopped
     networks:
       coolify:

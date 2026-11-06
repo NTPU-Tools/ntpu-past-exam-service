@@ -15,6 +15,9 @@ RUN touch src/main.rs && cargo build --release --locked
 
 FROM debian:bookworm-slim AS runtime
 
+ARG SOURCE_COMMIT=unknown
+ENV COMMIT_SHA=${SOURCE_COMMIT}
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
