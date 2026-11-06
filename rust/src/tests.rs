@@ -286,7 +286,7 @@ fn email_rendering_vectors() {
     }
     for case in data["send_email_calls"].as_array().unwrap() {
         let service_name = case["SERVICE_NAME"].as_str().unwrap_or("local");
-        // F-16: production is detected by name, so `oracle-production-coolify`
+        // F-16: production is detected by name, so `service-production`
         // no longer receives the test prefix (the reference vector does).
         let expected = if config::is_production(service_name) {
             "審核通過 - 北大考古題 NTPU Past Exam".to_string()
@@ -301,7 +301,7 @@ fn email_rendering_vectors() {
     }
     assert!(config::is_production("PROD"));
     assert!(config::is_production("production"));
-    assert!(config::is_production("oracle-production-coolify"));
+    assert!(config::is_production("service-production"));
     assert!(!config::is_production("local"));
     assert!(!config::is_production("contract"));
     assert!(!config::is_production("staging"));

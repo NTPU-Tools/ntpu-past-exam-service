@@ -1,8 +1,8 @@
-# Coolify "Docker Compose" build pack for the Rust backend.
+# Backend stack: a one-shot Alembic migration, then the Rust API.
 #
-# Every deployment runs Alembic from the Python image first; the Rust API only
-# starts once that exits 0. A failed migration leaves the API down instead of
-# serving against a half-migrated schema. See docs/rust-rewrite/09-deployment.md.
+#   docker compose --env-file .env up -d --build
+#
+# Set AUTH_COOKIE_SECURE=true when serving over HTTPS.
 
 x-database: &database
   DATABASE_HOST: ${DATABASE_HOST}
@@ -21,13 +21,13 @@ services:
       <<: *database
       DATABASE_DRIVER: ${DATABASE_DRIVER:-postgresql+psycopg}
     restart: "no"
-    networks:
-      - coolify
 
   api:
     build:
       context: ./rust
       dockerfile: Dockerfile
+      args:
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-unknown}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -36,28 +36,23 @@ services:
       PORT: 8080
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       R2_URL: ${R2_URL}
       R2_ACCESS_KEY: ${R2_ACCESS_KEY}
       R2_ACCESS_TOKEN: ${R2_ACCESS_TOKEN}
       R2_BUCKET_NAME: ${R2_BUCKET_NAME}
       R2_FILE_PATH: ${R2_FILE_PATH}
       HASH_KEY: ${HASH_KEY}
-      ORIGIN: ${ORIGIN}
-      AWS_EMAIL_SENDER: ${AWS_EMAIL_SENDER}
-      AWS_ACCESS_KEY: ${AWS_ACCESS_KEY}
-      AWS_ACCESS_SECRET: ${AWS_ACCESS_SECRET}
-      GOOGLE_SERVICE_CLIENT_ID: ${GOOGLE_SERVICE_CLIENT_ID}
-      GOOGLE_SERVICE_SERCET: ${GOOGLE_SERVICE_SERCET}
+      ORIGIN: ${ORIGIN:-}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      AWS_EMAIL_SENDER: ${AWS_EMAIL_SENDER:-}
+      AWS_ACCESS_KEY: ${AWS_ACCESS_KEY:-}
+      AWS_ACCESS_SECRET: ${AWS_ACCESS_SECRET:-}
+      GOOGLE_SERVICE_CLIENT_ID: ${GOOGLE_SERVICE_CLIENT_ID:-}
+      GOOGLE_SERVICE_SERCET: ${GOOGLE_SERVICE_SERCET:-}
       LOG_TAIL_SOURCE_KEY: ${LOG_TAIL_SOURCE_KEY:-}
-      SERVICE_NAME: ${SERVICE_NAME}
+      SERVICE_NAME: ${SERVICE_NAME:-local}
+      RUST_LOG: ${RUST_LOG:-info}
+    ports:
+      - "${API_PORT:-8080}:8080"
     restart: unless-stopped
-    networks:
-      coolify:
-        # Caddy reaches the API by this name (past-exam-api.ntpu.cc upstream).
-        aliases:
-          - past-exam-rust-api
-
-networks:
-  coolify:
-    external: true

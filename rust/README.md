@@ -1,7 +1,6 @@
 # past-exam-service (Rust)
 
-Drop-in replacement for the FastAPI backend. The contract it implements is
-specified in [`../docs/rust-rewrite/`](../docs/rust-rewrite/).
+Drop-in replacement for the FastAPI backend.
 
 ## Stack
 
@@ -27,6 +26,13 @@ cargo run -- serve
 Health check: `GET /ping`. The binary also supports `past-exam-service
 healthcheck` (used by the Docker healthcheck).
 
+The repository-root `docker-compose.yml` runs a one-shot Alembic migration and
+then starts the API:
+
+```bash
+docker compose --env-file .env up -d --build
+```
+
 ## Test
 
 ```bash
@@ -40,9 +46,8 @@ already running).
 
 ## Environment
 
-All legacy variables are honoured (see `docs/rust-rewrite/02-runtime.md`).
-Additional settings: `PORT`, `BIND_ADDRESS`, `DATABASE_URL`,
-`DATABASE_MAX_CONNECTIONS`, `LMS_BASE_URL`, `GOOGLE_TOKEN_URL`,
+All legacy variables are honoured. Additional settings: `PORT`, `BIND_ADDRESS`,
+`DATABASE_URL`, `DATABASE_MAX_CONNECTIONS`, `LMS_BASE_URL`, `GOOGLE_TOKEN_URL`,
 `GOOGLE_USERINFO_URL`, `AWS_SES_ENDPOINT`, `LOG_TAIL_HOST`, `SCHEMA_CHECK`,
 `CACHE_PREFIX`, `CACHE_CLEAR_LEGACY_PREFIX`, `MAX_REQUEST_BODY_BYTES`.
 
@@ -53,14 +58,10 @@ warning and starts, so an older build can restart after an expand-only
 migration. After adding a migration, run
 `python scripts/sync_schema_revisions.py`; `cargo test` fails until you do.
 
-Production deploys use `docker-compose.coolify.yml`: a Python `migrate`
-service runs `alembic upgrade head` and the API starts only after it exits 0.
-See `docs/rust-rewrite/09-deployment.md`.
-
-## Deliberate fixes validated against production
+## Behaviour notes
 
 - F-16: notification subjects no longer get the 「測試環境 - 」 prefix when
-  `SERVICE_NAME` is `oracle-production-coolify`; override with
+  `SERVICE_NAME` contains `prod` or `production`; override with
   `EMAIL_SUBJECT_PREFIX`.
 - F-17: `GET /posts?user_id=X` no longer exposes X's anonymous posts to other
   users.
@@ -69,7 +70,6 @@ See `docs/rust-rewrite/09-deployment.md`.
 
 ## Known gaps
 
-Failure-path tests for SES, S3 and Redis outages (documented as L3 items in
-`docs/rust-rewrite/08-testing.md`) are not implemented yet; the happy paths and
-the Redis-shared session/rate-limit semantics are covered by the contract
-suite.
+Failure-path tests for SES, S3 and Redis outages are not implemented yet; the
+happy paths and the Redis-shared session/rate-limit semantics are covered by the
+contract suite.

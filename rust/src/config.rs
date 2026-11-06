@@ -233,7 +233,7 @@ impl Config {
     }
 }
 
-/// Production names look like `PROD`, `production`, `oracle-production-coolify`.
+/// Production names look like `PROD`, `production`, `service-production`.
 pub(crate) fn is_production(service_name: &str) -> bool {
     service_name
         .split(|character: char| !character.is_alphanumeric())

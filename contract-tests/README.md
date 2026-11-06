@@ -1,9 +1,8 @@
 # Contract tests
 
 Black-box HTTP contract suite for the NTPU Past Exam backend. It runs against
-any implementation — today the Python reference on `main`, later the Rust
-rewrite — and is the acceptance gate described in
-`docs/rust-rewrite/08-testing.md`.
+any implementation — today the Python reference on `main`, and the Rust
+rewrite — and is the acceptance gate for backend behaviour.
 
 ## Run against the Python reference
 
@@ -25,8 +24,7 @@ CONTRACT_BASE_URL=http://127.0.0.1:58081 CONTRACT_TARGET=rust cargo test
 ```
 
 `CONTRACT_TARGET=rust` additionally enables the tests for the deliberate fixes
-listed in `docs/rust-rewrite/07-deviations.md` (they fail on the reference by
-design).
+(they fail on the reference by design).
 
 | Variable | Default |
 | --- | --- |

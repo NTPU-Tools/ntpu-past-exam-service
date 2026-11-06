@@ -3,7 +3,6 @@
 ## Tech Stack
 
 - **Framework**: [Fast api](https://fastapi.tiangolo.com/)
-- **Deployment**: [GCP](https://cloud.google.com/?hl=
 - **Monitor**: [Better Stack](https://betterstack.com/)
 - **Static File**: Cloudflare R2
 - **Database**: PlanetScale

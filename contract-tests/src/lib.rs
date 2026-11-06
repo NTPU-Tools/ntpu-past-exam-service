@@ -3,7 +3,7 @@
 //! Every test creates its own uniquely named rows directly in PostgreSQL, talks
 //! to the server under test over HTTP only, and inspects Redis / object storage
 //! where the contract includes shared state (refresh sessions, rate limits,
-//! uploaded files). See docs/rust-rewrite/08-testing.md.
+//! uploaded files).
 
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
