@@ -1,52 +1,50 @@
 # 北大考古題 NTPU Past Exam Backend
 
-## Tech Stack
+Rust backend for the NTPU Past Exam service: Axum + Tokio, SQLx/PostgreSQL,
+Redis, Cloudflare R2, and Amazon SES.
 
-- **Framework**: [Fast api](https://fastapi.tiangolo.com/)
-- **Monitor**: [Better Stack](https://betterstack.com/)
-- **Static File**: Cloudflare R2
-- **Database**: PlanetScale
+## Layout
 
+| Path | Purpose |
+| --- | --- |
+| `rust/` | Service implementation |
+| `rust/migrations/` | SQLx migrations (schema owner) |
+| `contract-tests/` | Black-box HTTP contract suite |
+| `docker-compose.yml` | One-shot migration + API stack |
 
-## Start dev server
-1. Create a ".env" file in root folder. It should contain following key:
-```
-DATABASE_HOST=
-DATABASE_USERNAME=
-DATABASE_PASSWORD=
-DATABASE=
+## Run
 
-R2_ACCESS_TOKEN=
-R2_ACCESS_KEY=
-R2_URL=
-R2_BUCKET_NAME=
-R2_FILE_PATH=
+```bash
+# isolated PostgreSQL / Redis / MinIO stack
+docker compose -f contract-tests/docker-compose.yml up -d --build --wait
 
-AWS_EMAIL_SENDER=
-AWS_ACCESS_KEY=
-AWS_ACCESS_SECRET=
-
-ORIGIN=
-HASH_KEY=
-LOG_TAIL_SOURCE_KEY=
-#
-REDIS_CONNECTION_STRING=
-#
-REDIS_HOST=
-REDIS_PORT=
-REDIS_PASSWORD=
-
-GOOGLE_SERVICE_SERCET=
-GOOGLE_SERVICE_CLIENT_ID=
+# run the service against it
+cd rust
+set -a; . ../contract-tests/contract.env; set +a
+cargo run -- serve
 ```
 
-You should get the value from the code owner.
-2. Install dependancies:
-```shell
-poetry install
+For the full stack, copy `.env.example` to `.env`, fill in the values, then:
+
+```bash
+docker compose --env-file .env up -d --build
 ```
 
-3. Start dev server
-```shell
-poetry run uvicorn main:app --reload 
+Health check: `GET /ping`.
+
+## Test
+
+```bash
+cd rust
+cargo test
+cargo clippy --all-targets
+
+cd ../contract-tests
+cargo test
 ```
+
+## Configuration
+
+See `.env.example` for the database, Redis, object storage, mail, Google login,
+and auth settings. `SERVICE_NAME`, `ORIGIN`, and `AUTH_COOKIE_SECURE` control
+environment-specific behaviour.

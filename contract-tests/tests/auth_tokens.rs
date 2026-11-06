@@ -15,12 +15,22 @@ async fn missing_or_malformed_authorization_header() {
     let ctx = Ctx::new().await;
     let dept = ctx.department(true).await;
     let course = ctx.course(&dept).await;
-    for path in [ROUTER_AUTH_PATH.to_string(), thread_list_path(&course), "/verify-token".into()] {
+    for path in [
+        ROUTER_AUTH_PATH.to_string(),
+        thread_list_path(&course),
+        "/verify-token".into(),
+    ] {
         ctx.get(&path)
             .send()
             .await
             .expect_detail(401, "Invalid or missing authorization header");
-        for header in ["Token abc", "bearer abc", "Bearer", "Bearer  abc", "Bearer a b"] {
+        for header in [
+            "Token abc",
+            "bearer abc",
+            "Bearer",
+            "Bearer  abc",
+            "Bearer a b",
+        ] {
             ctx.get(&path)
                 .header("Authorization", header)
                 .send()
@@ -63,13 +73,37 @@ async fn invalid_signatures_and_claims_are_rejected() {
     );
 
     let cases = [
-        ("expired", sign(&json!({"sub": id, "id": id, "type": "access", "exp": now() - 5}))),
-        ("wrong key", sign_with_key(&json!({"sub": id, "id": id, "type": "access", "exp": exp}), "other-key")),
-        ("missing exp", sign(&json!({"sub": id, "id": id, "type": "access"}))),
-        ("missing sub", sign(&json!({"id": id, "type": "access", "exp": exp}))),
-        ("non-string sub", sign(&json!({"sub": 12, "id": id, "type": "access", "exp": exp}))),
-        ("audience", sign(&json!({"sub": id, "id": id, "type": "access", "exp": exp, "aud": "x"}))),
-        ("not yet valid", sign(&json!({"sub": id, "id": id, "type": "access", "exp": exp, "nbf": now() + 300}))),
+        (
+            "expired",
+            sign(&json!({"sub": id, "id": id, "type": "access", "exp": now() - 5})),
+        ),
+        (
+            "wrong key",
+            sign_with_key(
+                &json!({"sub": id, "id": id, "type": "access", "exp": exp}),
+                "other-key",
+            ),
+        ),
+        (
+            "missing exp",
+            sign(&json!({"sub": id, "id": id, "type": "access"})),
+        ),
+        (
+            "missing sub",
+            sign(&json!({"id": id, "type": "access", "exp": exp})),
+        ),
+        (
+            "non-string sub",
+            sign(&json!({"sub": 12, "id": id, "type": "access", "exp": exp})),
+        ),
+        (
+            "audience",
+            sign(&json!({"sub": id, "id": id, "type": "access", "exp": exp, "aud": "x"})),
+        ),
+        (
+            "not yet valid",
+            sign(&json!({"sub": id, "id": id, "type": "access", "exp": exp, "nbf": now() + 300})),
+        ),
         ("alg none", alg_none),
         ("garbage", "not-a-jwt".to_string()),
     ];
@@ -131,9 +165,17 @@ async fn early_tokens_resolve_by_sub_as_id_or_username() {
 async fn unknown_id_claim_falls_back_to_sub() {
     let ctx = Ctx::new().await;
     let user = ctx.user().await;
-    let token = sign(&json!({"sub": user.username, "id": "no-such-id", "type": "access", "exp": now() + 600}));
-    ctx.get(ROUTER_AUTH_PATH).bearer(&token).send().await.expect(200);
-    let token = sign(&json!({"sub": "nobody-at-all", "id": "no-such-id", "type": "access", "exp": now() + 600}));
+    let token = sign(
+        &json!({"sub": user.username, "id": "no-such-id", "type": "access", "exp": now() + 600}),
+    );
+    ctx.get(ROUTER_AUTH_PATH)
+        .bearer(&token)
+        .send()
+        .await
+        .expect(200);
+    let token = sign(
+        &json!({"sub": "nobody-at-all", "id": "no-such-id", "type": "access", "exp": now() + 600}),
+    );
     ctx.get(ROUTER_AUTH_PATH)
         .bearer(&token)
         .send()
@@ -171,7 +213,11 @@ async fn forged_privilege_claims_are_ignored() {
         "isu": true, "adm": format!("[\"{}\"]", dept.id),
     }));
 
-    ctx.get("/users").bearer(&forged).send().await.expect_detail(403, "Forbidden");
+    ctx.get("/users")
+        .bearer(&forged)
+        .send()
+        .await
+        .expect_detail(403, "Forbidden");
     ctx.get(&format!("/departments/{}/join-request", dept.id))
         .bearer(&forged)
         .send()
@@ -211,7 +257,11 @@ async fn revoked_privileges_take_effect_immediately() {
         )
         .await
         .unwrap();
-    ctx.get(&path).auth(&user).send().await.expect_detail(403, "Forbidden");
+    ctx.get(&path)
+        .auth(&user)
+        .send()
+        .await
+        .expect_detail(403, "Forbidden");
 }
 
 #[tokio::test]

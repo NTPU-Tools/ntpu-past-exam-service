@@ -9,9 +9,18 @@ async fn list_users_requires_super_user_and_hides_password_hashes() {
     let admin = ctx.super_user().await;
     let regular = ctx.user().await;
 
-    ctx.get("/users").auth(&regular).send().await.expect_detail(403, "Forbidden");
+    ctx.get("/users")
+        .auth(&regular)
+        .send()
+        .await
+        .expect_detail(403, "Forbidden");
 
-    let resp = ctx.get("/users").auth(&admin).query(&[("limit", "100")]).send().await;
+    let resp = ctx
+        .get("/users")
+        .auth(&admin)
+        .query(&[("limit", "100")])
+        .send()
+        .await;
     resp.expect(200);
     let users = resp.json();
     let users = users.as_array().unwrap();
@@ -21,7 +30,12 @@ async fn list_users_requires_super_user_and_hides_password_hashes() {
         assert_ts_offset(&u["create_time"]);
     }
 
-    let page = ctx.get("/users").auth(&admin).query(&[("limit", "1"), ("skip", "1")]).send().await;
+    let page = ctx
+        .get("/users")
+        .auth(&admin)
+        .query(&[("limit", "1"), ("skip", "1")])
+        .send()
+        .await;
     page.expect(200);
     assert_eq!(page.json().as_array().unwrap().len(), 1);
 }
@@ -86,7 +100,10 @@ async fn me_returns_full_profile_with_default_preferences() {
     let resp = ctx.get("/users/me").auth(&user).send().await;
     resp.expect(200);
     let body = resp.json();
-    assert_keys(&body, &with_keys(USER_KEYS, &["show_empty_courses", "default_is_anonymous"]));
+    assert_keys(
+        &body,
+        &with_keys(USER_KEYS, &["show_empty_courses", "default_is_anonymous"]),
+    );
     assert_eq!(body["id"], json!(user.id));
     assert_eq!(body["username"], json!(user.username));
     assert_eq!(body["readable_name"], json!("王小明"));
@@ -104,7 +121,10 @@ async fn me_returns_full_profile_with_default_preferences() {
 async fn me_reflects_stored_preferences() {
     let ctx = Ctx::new().await;
     let user = ctx
-        .create_user(NewUser { preferences: Some((false, true)), ..Default::default() })
+        .create_user(NewUser {
+            preferences: Some((false, true)),
+            ..Default::default()
+        })
         .await;
     let body = ctx.get("/users/me").auth(&user).send().await.json();
     assert_eq!(body["show_empty_courses"], json!(false));
@@ -115,7 +135,11 @@ async fn me_reflects_stored_preferences() {
 async fn viewing_own_id_returns_the_redacted_view() {
     let ctx = Ctx::new().await;
     let user = ctx.user().await;
-    let resp = ctx.get(&format!("/users/{}", user.id)).auth(&user).send().await;
+    let resp = ctx
+        .get(&format!("/users/{}", user.id))
+        .auth(&user)
+        .send()
+        .await;
     resp.expect(200);
     assert_keys(&resp.json(), USER_REDACTED_KEYS);
 }
@@ -125,11 +149,19 @@ async fn other_profiles_require_a_shared_admin_department() {
     let ctx = Ctx::new().await;
     let viewer = ctx.user().await;
     let target = ctx
-        .create_user(NewUser { note: Some("join reason".into()), email: Some("t@x".into()), ..Default::default() })
+        .create_user(NewUser {
+            note: Some("join reason".into()),
+            email: Some("t@x".into()),
+            ..Default::default()
+        })
         .await;
     let path = format!("/users/{}", target.id);
 
-    ctx.get(&path).auth(&viewer).send().await.expect_detail(403, "Not allowed to view this user");
+    ctx.get(&path)
+        .auth(&viewer)
+        .send()
+        .await
+        .expect_detail(403, "Not allowed to view this user");
 
     // Admin of a department where the target only has a PENDING request.
     let dept = ctx.department(false).await;
@@ -166,11 +198,19 @@ async fn super_user_views_anyone_and_gets_404_for_missing_users() {
     let admin = ctx.super_user().await;
     let regular = ctx.user().await;
     let target = ctx.user().await;
-    let resp = ctx.get(&format!("/users/{}", target.id)).auth(&admin).send().await;
+    let resp = ctx
+        .get(&format!("/users/{}", target.id))
+        .auth(&admin)
+        .send()
+        .await;
     resp.expect(200);
     assert_keys(&resp.json(), USER_REDACTED_KEYS);
 
-    ctx.get("/users/no-such-user").auth(&admin).send().await.expect_detail(404, "User not found");
+    ctx.get("/users/no-such-user")
+        .auth(&admin)
+        .send()
+        .await
+        .expect_detail(404, "User not found");
     ctx.get("/users/no-such-user")
         .auth(&regular)
         .send()
@@ -189,14 +229,25 @@ async fn departments_admin_lists_approved_admin_departments() {
     ctx.member(&user, &member_dept).await;
     ctx.membership(&user, &pending_admin, "PENDING", true).await;
 
-    let resp = ctx.get("/users/me/departments-admin").auth(&user).send().await;
+    let resp = ctx
+        .get("/users/me/departments-admin")
+        .auth(&user)
+        .send()
+        .await;
     resp.expect(200);
     let body = resp.json();
     assert_eq!(ids(&body), vec![admin_dept.id.clone()]);
     assert_keys(&body[0], DEPARTMENT_KEYS);
 
     let nobody = ctx.user().await;
-    assert_eq!(ctx.get("/users/me/departments-admin").auth(&nobody).send().await.json(), json!([]));
+    assert_eq!(
+        ctx.get("/users/me/departments-admin")
+            .auth(&nobody)
+            .send()
+            .await
+            .json(),
+        json!([])
+    );
 }
 
 #[tokio::test]
@@ -204,7 +255,12 @@ async fn departments_admin_for_super_user_is_every_department() {
     let ctx = Ctx::new().await;
     let admin = ctx.super_user().await;
     let dept = ctx.department(false).await;
-    let body = ctx.get("/users/me/departments-admin").auth(&admin).send().await.json();
+    let body = ctx
+        .get("/users/me/departments-admin")
+        .auth(&admin)
+        .send()
+        .await
+        .json();
     assert!(ids(&body).contains(&dept.id));
 }
 
@@ -222,10 +278,19 @@ async fn update_me_changes_major_and_note_only() {
         .await;
     resp.expect(200);
     let body = resp.json();
-    assert_keys(&body, &with_keys(USER_KEYS, &["show_empty_courses", "default_is_anonymous"]));
+    assert_keys(
+        &body,
+        &with_keys(USER_KEYS, &["show_empty_courses", "default_is_anonymous"]),
+    );
     assert_eq!(body["school_department"], json!("經濟學系"));
     assert_eq!(body["note"], json!("請讓我加入"));
-    for key in ["username", "readable_name", "email", "is_super_user", "create_time"] {
+    for key in [
+        "username",
+        "readable_name",
+        "email",
+        "is_super_user",
+        "create_time",
+    ] {
         assert_eq!(body[key], before[key], "{key} must not change");
     }
     assert_ts_offset(&body["updated_time"]);
@@ -238,9 +303,18 @@ async fn update_me_changes_major_and_note_only() {
 async fn update_me_note_defaults_to_empty_and_major_is_required() {
     let ctx = Ctx::new().await;
     let user = ctx
-        .create_user(NewUser { note: Some("old".into()), ..Default::default() })
+        .create_user(NewUser {
+            note: Some("old".into()),
+            ..Default::default()
+        })
         .await;
-    let body = ctx.put("/users/update/me").auth(&user).form(&[("major", "")]).send().await.json();
+    let body = ctx
+        .put("/users/update/me")
+        .auth(&user)
+        .form(&[("major", "")])
+        .send()
+        .await
+        .json();
     assert_eq!(body["note"], json!(""));
     assert_eq!(body["school_department"], json!(""));
 
@@ -264,7 +338,10 @@ async fn preferences_upsert() {
         .send()
         .await;
     resp.expect(200);
-    assert_eq!(resp.json(), json!({"show_empty_courses": false, "default_is_anonymous": true}));
+    assert_eq!(
+        resp.json(),
+        json!({"show_empty_courses": false, "default_is_anonymous": true})
+    );
 
     let resp = ctx
         .put("/users/me/preferences")
@@ -272,9 +349,16 @@ async fn preferences_upsert() {
         .json(&json!({"show_empty_courses": true, "default_is_anonymous": true}))
         .send()
         .await;
-    assert_eq!(resp.json(), json!({"show_empty_courses": true, "default_is_anonymous": true}));
     assert_eq!(
-        ctx.scalar_i64("SELECT count(*) FROM user_preferences WHERE user_id = $1", &[&user.id]).await,
+        resp.json(),
+        json!({"show_empty_courses": true, "default_is_anonymous": true})
+    );
+    assert_eq!(
+        ctx.scalar_i64(
+            "SELECT count(*) FROM user_preferences WHERE user_id = $1",
+            &[&user.id]
+        )
+        .await,
         1
     );
     let me = ctx.get("/users/me").auth(&user).send().await.json();

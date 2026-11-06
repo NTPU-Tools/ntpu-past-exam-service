@@ -18,7 +18,8 @@ fn pdf(bytes: Vec<u8>) -> Part {
 }
 
 async fn post_count(ctx: &Ctx, title: &str) -> i64 {
-    ctx.scalar_i64("SELECT count(*) FROM posts WHERE title = $1", &[&title]).await
+    ctx.scalar_i64("SELECT count(*) FROM posts WHERE title = $1", &[&title])
+        .await
 }
 
 async fn list(ctx: &Ctx, user: &User, query: &[(&str, &str)]) -> Value {
@@ -37,7 +38,11 @@ async fn create_in_public_department_is_auto_approved() {
     let resp = ctx
         .post("/posts")
         .auth(&user)
-        .form(&[("title", "期末考"), ("course_id", &course.id), ("department_id", &dept.id)])
+        .form(&[
+            ("title", "期末考"),
+            ("course_id", &course.id),
+            ("department_id", &dept.id),
+        ])
         .send()
         .await;
     resp.expect(200);
@@ -87,7 +92,10 @@ async fn create_in_private_department_is_pending_and_keeps_flags() {
     resp.expect(200);
     let id = resp.json()["post_id"].as_str().unwrap().to_string();
     let row = ctx
-        .row("SELECT status, content, is_anonymous, is_migrate FROM posts WHERE id = $1", &[&id])
+        .row(
+            "SELECT status, content, is_anonymous, is_migrate FROM posts WHERE id = $1",
+            &[&id],
+        )
         .await
         .unwrap();
     assert_eq!(row.get::<_, String>(0), "PENDING");
@@ -109,20 +117,39 @@ async fn uploaded_pdfs_are_stored_and_listed() {
     let resp = ctx
         .post("/posts")
         .auth(&user)
-        .multipart(post_form("with files", &course).part("files", pdf(first.clone())).part("files", pdf(second.clone())))
+        .multipart(
+            post_form("with files", &course)
+                .part("files", pdf(first.clone()))
+                .part("files", pdf(second.clone())),
+        )
         .send()
         .await;
     resp.expect(200);
     let post_id = resp.json()["post_id"].as_str().unwrap().to_string();
 
-    let detail = ctx.get(&format!("/posts/{post_id}")).auth(&user).send().await.json();
-    let files: Vec<String> = detail["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap().to_string()).collect();
+    let detail = ctx
+        .get(&format!("/posts/{post_id}"))
+        .auth(&user)
+        .send()
+        .await
+        .json();
+    let files: Vec<String> = detail["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f.as_str().unwrap().to_string())
+        .collect();
     assert_eq!(files.len(), 2);
     let prefix = format!("{}/{}/{}/", config().file_base, user.id, post_id);
     let mut stored = Vec::new();
     for url in &files {
-        let key = url.strip_prefix(&prefix).unwrap_or_else(|| panic!("{url} must start with {prefix}"));
-        assert!(uuid::Uuid::parse_str(key).is_ok(), "object key ends with a uuid4: {url}");
+        let key = url
+            .strip_prefix(&prefix)
+            .unwrap_or_else(|| panic!("{url} must start with {prefix}"));
+        assert!(
+            uuid::Uuid::parse_str(key).is_ok(),
+            "object key ends with a uuid4: {url}"
+        );
         let object = ctx.fetch_object(url).await;
         object.expect(200);
         stored.push(object.body);
@@ -130,7 +157,11 @@ async fn uploaded_pdfs_are_stored_and_listed() {
     stored.sort_by_key(|b| b.len());
     assert_eq!(stored, vec![first, second]);
     assert_eq!(
-        ctx.scalar_i64("SELECT count(*) FROM posts_files WHERE post_id = $1", &[&post_id]).await,
+        ctx.scalar_i64(
+            "SELECT count(*) FROM posts_files WHERE post_id = $1",
+            &[&post_id]
+        )
+        .await,
         2
     );
 }
@@ -149,9 +180,17 @@ async fn uploaded_pdf_has_pdf_content_type() {
         .send()
         .await;
     let post_id = resp.json()["post_id"].as_str().unwrap().to_string();
-    let detail = ctx.get(&format!("/posts/{post_id}")).auth(&user).send().await.json();
+    let detail = ctx
+        .get(&format!("/posts/{post_id}"))
+        .auth(&user)
+        .send()
+        .await
+        .json();
     let object = ctx.fetch_object(detail["files"][0].as_str().unwrap()).await;
-    assert_eq!(object.header("content-type").as_deref(), Some("application/pdf"));
+    assert_eq!(
+        object.header("content-type").as_deref(),
+        Some("application/pdf")
+    );
 }
 
 #[tokio::test]
@@ -167,16 +206,24 @@ async fn create_target_validation() {
         let ctx = &ctx;
         let user = user.clone();
         async move {
-            let mut fields = vec![("title".to_string(), "t".to_string()), ("course_id".to_string(), course_id)];
+            let mut fields = vec![
+                ("title".to_string(), "t".to_string()),
+                ("course_id".to_string(), course_id),
+            ];
             if let Some(d) = department_id {
                 fields.push(("department_id".to_string(), d));
             }
-            let fields: Vec<(&str, &str)> = fields.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+            let fields: Vec<(&str, &str)> = fields
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
             ctx.post("/posts").auth(&user).form(&fields).send().await
         }
     };
 
-    send("no-such-course".into(), Some(public.id.clone())).await.expect_detail(404, "Course not found");
+    send("no-such-course".into(), Some(public.id.clone()))
+        .await
+        .expect_detail(404, "Course not found");
     send(public_course.id.clone(), Some(private.id.clone()))
         .await
         .expect_detail(400, "Course does not belong to the selected department");
@@ -206,24 +253,41 @@ async fn create_field_validation() {
         .expect_validation(&["body", "title"], Some("missing"));
     ctx.post("/posts")
         .auth(&user)
-        .form(&[("title", &long_title), ("course_id", &course.id), ("department_id", &dept.id)])
+        .form(&[
+            ("title", &long_title),
+            ("course_id", &course.id),
+            ("department_id", &dept.id),
+        ])
         .send()
         .await
         .expect_validation(&["body", "title"], Some("string_too_long"));
     ctx.post("/posts")
         .auth(&user)
-        .form(&[("title", "t"), ("course_id", &course.id), ("department_id", &dept.id), ("content", &long_content)])
+        .form(&[
+            ("title", "t"),
+            ("course_id", &course.id),
+            ("department_id", &dept.id),
+            ("content", &long_content),
+        ])
         .send()
         .await
         .expect_validation(&["body", "content"], Some("string_too_long"));
     ctx.post("/posts")
         .auth(&user)
-        .form(&[("title", &max_title), ("course_id", &course.id), ("department_id", &dept.id)])
+        .form(&[
+            ("title", &max_title),
+            ("course_id", &course.id),
+            ("department_id", &dept.id),
+        ])
         .send()
         .await
         .expect(200);
     ctx.post("/posts")
-        .form(&[("title", "t"), ("course_id", &course.id), ("department_id", &dept.id)])
+        .form(&[
+            ("title", "t"),
+            ("course_id", &course.id),
+            ("department_id", &dept.id),
+        ])
         .send()
         .await
         .expect(401);
@@ -238,13 +302,16 @@ async fn upload_validation_rejects_without_side_effects() {
 
     let cases: Vec<(Form, u16, &str)> = vec![
         (
-            post_form("bad-type", &course).part("files", file_part(pdf_bytes(100), "a.pdf", "text/plain")),
+            post_form("bad-type", &course)
+                .part("files", file_part(pdf_bytes(100), "a.pdf", "text/plain")),
             400,
             "Only PDF files are allowed",
         ),
         (
-            post_form("bad-type-param", &course)
-                .part("files", file_part(pdf_bytes(100), "a.pdf", "application/pdf; charset=binary")),
+            post_form("bad-type-param", &course).part(
+                "files",
+                file_part(pdf_bytes(100), "a.pdf", "application/pdf; charset=binary"),
+            ),
             400,
             "Only PDF files are allowed",
         ),
@@ -254,7 +321,9 @@ async fn upload_validation_rejects_without_side_effects() {
             "Invalid PDF content",
         ),
         (
-            (0..11).fold(post_form("too-many", &course), |f, _| f.part("files", pdf(pdf_bytes(10)))),
+            (0..11).fold(post_form("too-many", &course), |f, _| {
+                f.part("files", pdf(pdf_bytes(10)))
+            }),
             413,
             "Too many files; maximum is 10",
         ),
@@ -273,23 +342,63 @@ async fn upload_validation_rejects_without_side_effects() {
         ),
     ];
     for (form, status, detail) in cases {
-        ctx.post("/posts").auth(&user).multipart(form).send().await.expect_detail(status, detail);
+        ctx.post("/posts")
+            .auth(&user)
+            .multipart(form)
+            .send()
+            .await
+            .expect_detail(status, detail);
     }
-    for title in ["bad-type", "bad-type-param", "spoofed", "too-many", "too-big", "too-much"] {
-        assert_eq!(post_count(&ctx, title).await, 0, "{title} must not create a post");
+    for title in [
+        "bad-type",
+        "bad-type-param",
+        "spoofed",
+        "too-many",
+        "too-big",
+        "too-much",
+    ] {
+        assert_eq!(
+            post_count(&ctx, title).await,
+            0,
+            "{title} must not create a post"
+        );
     }
     assert_eq!(
-        ctx.scalar_i64("SELECT count(*) FROM posts WHERE owner_id = $1", &[&user.id]).await,
+        ctx.scalar_i64(
+            "SELECT count(*) FROM posts WHERE owner_id = $1",
+            &[&user.id]
+        )
+        .await,
         0
     );
 
     // Exactly at the limits is accepted: 10 files, 20 MiB single file.
-    let ten = (0..10).fold(post_form("ten-files", &course), |f, _| f.part("files", pdf(pdf_bytes(10))));
-    ctx.post("/posts").auth(&user).multipart(ten).send().await.expect(200);
+    let ten = (0..10).fold(post_form("ten-files", &course), |f, _| {
+        f.part("files", pdf(pdf_bytes(10)))
+    });
+    ctx.post("/posts")
+        .auth(&user)
+        .multipart(ten)
+        .send()
+        .await
+        .expect(200);
     let max = post_form("max-size", &course).part("files", pdf(pdf_bytes(20 * MIB)));
-    ctx.post("/posts").auth(&user).multipart(max).send().await.expect(200);
-    let alt = post_form("x-pdf", &course).part("files", file_part(pdf_bytes(10), "a.pdf", "application/x-pdf"));
-    ctx.post("/posts").auth(&user).multipart(alt).send().await.expect(200);
+    ctx.post("/posts")
+        .auth(&user)
+        .multipart(max)
+        .send()
+        .await
+        .expect(200);
+    let alt = post_form("x-pdf", &course).part(
+        "files",
+        file_part(pdf_bytes(10), "a.pdf", "application/x-pdf"),
+    );
+    ctx.post("/posts")
+        .auth(&user)
+        .multipart(alt)
+        .send()
+        .await
+        .expect(200);
 }
 
 #[tokio::test]
@@ -317,7 +426,10 @@ async fn list_visibility_rules() {
     assert_eq!(got.len(), 4);
 
     let root = ctx.super_user().await;
-    assert_eq!(ids(&list(&ctx, &root, &[("course_id", &course.id)]).await).len(), 4);
+    assert_eq!(
+        ids(&list(&ctx, &root, &[("course_id", &course.id)]).await).len(),
+        4
+    );
 }
 
 #[tokio::test]
@@ -327,9 +439,15 @@ async fn list_excludes_invisible_departments() {
     let hidden = ctx.department(false).await;
     let course = ctx.course(&hidden).await;
     ctx.seed_post(&course, &viewer, "APPROVED").await;
-    assert_eq!(list(&ctx, &viewer, &[("department_id", &hidden.id)]).await, json!([]));
+    assert_eq!(
+        list(&ctx, &viewer, &[("department_id", &hidden.id)]).await,
+        json!([])
+    );
     // Own posts in a department that is no longer visible are hidden too.
-    assert_eq!(list(&ctx, &viewer, &[("user_id", &viewer.id)]).await, json!([]));
+    assert_eq!(
+        list(&ctx, &viewer, &[("user_id", &viewer.id)]).await,
+        json!([])
+    );
 }
 
 #[tokio::test]
@@ -349,8 +467,24 @@ async fn list_status_filters() {
     let mut want = vec![pending.id.clone(), rejected.id.clone()];
     want.sort();
     assert_eq!(got, want, "PENDING includes REJECTED (P-07)");
-    assert_eq!(ids(&list(&ctx, &admin, &[("department_id", d), ("status", "APPROVED")]).await), vec![approved.id]);
-    assert_eq!(ids(&list(&ctx, &admin, &[("department_id", d), ("status", "REJECTED")]).await), vec![rejected.id]);
+    assert_eq!(
+        ids(&list(
+            &ctx,
+            &admin,
+            &[("department_id", d), ("status", "APPROVED")]
+        )
+        .await),
+        vec![approved.id]
+    );
+    assert_eq!(
+        ids(&list(
+            &ctx,
+            &admin,
+            &[("department_id", d), ("status", "REJECTED")]
+        )
+        .await),
+        vec![rejected.id]
+    );
     ctx.get("/posts")
         .auth(&admin)
         .query(&[("status", "approved")])
@@ -368,19 +502,34 @@ async fn list_filters_ordering_and_shape() {
     let course_a = ctx.course(&dept).await;
     let course_b = ctx.course(&dept).await;
     let old = ctx
-        .create_post(&course_a, &author, NewPost { create_time: Some("2025-01-01T00:00:00Z".into()), ..Default::default() })
+        .create_post(
+            &course_a,
+            &author,
+            NewPost {
+                create_time: Some("2025-01-01T00:00:00Z".into()),
+                ..Default::default()
+            },
+        )
         .await;
     let new = ctx
         .create_post(
             &course_a,
             &author,
-            NewPost { create_time: Some("2026-01-01T00:00:00Z".into()), anonymous: true, ..Default::default() },
+            NewPost {
+                create_time: Some("2026-01-01T00:00:00Z".into()),
+                anonymous: true,
+                ..Default::default()
+            },
         )
         .await;
     let other_course = ctx.seed_post(&course_b, &viewer, "APPROVED").await;
 
     let body = list(&ctx, &viewer, &[("department_id", &dept.id)]).await;
-    assert_eq!(ids(&body), vec![other_course.id.clone(), new.id.clone(), old.id.clone()], "create_time DESC");
+    assert_eq!(
+        ids(&body),
+        vec![other_course.id.clone(), new.id.clone(), old.id.clone()],
+        "create_time DESC"
+    );
     for item in body.as_array().unwrap() {
         assert_keys(item, &with_keys(POST_ROW_KEYS, &["course_name"]));
         assert_ts_offset(&item["create_time"]);
@@ -391,13 +540,31 @@ async fn list_filters_ordering_and_shape() {
     assert_eq!(anon["course_name"], json!(course_a.name));
     assert_eq!(body[2]["owner_id"], json!(author.id));
 
-    assert_eq!(ids(&list(&ctx, &viewer, &[("course_id", &course_b.id)]).await), vec![other_course.id.clone()]);
-    let by_author = ids(&list(&ctx, &author, &[("department_id", &dept.id), ("user_id", &author.id)]).await);
+    assert_eq!(
+        ids(&list(&ctx, &viewer, &[("course_id", &course_b.id)]).await),
+        vec![other_course.id.clone()]
+    );
+    let by_author = ids(&list(
+        &ctx,
+        &author,
+        &[("department_id", &dept.id), ("user_id", &author.id)],
+    )
+    .await);
     assert_eq!(by_author, vec![new.id.clone(), old.id.clone()]);
 
-    let page = ids(&list(&ctx, &viewer, &[("department_id", &dept.id), ("skip", "1"), ("limit", "1")]).await);
+    let page = ids(&list(
+        &ctx,
+        &viewer,
+        &[("department_id", &dept.id), ("skip", "1"), ("limit", "1")],
+    )
+    .await);
     assert_eq!(page, vec![new.id.clone()]);
-    let clamped = ids(&list(&ctx, &viewer, &[("department_id", &dept.id), ("limit", "0")]).await);
+    let clamped = ids(&list(
+        &ctx,
+        &viewer,
+        &[("department_id", &dept.id), ("limit", "0")],
+    )
+    .await);
     assert_eq!(clamped.len(), 1);
 }
 
@@ -408,25 +575,51 @@ async fn list_requires_an_existing_course() {
     let dept = ctx.department(true).await;
     let course = ctx.course(&dept).await;
     let post = ctx.seed_post(&course, &viewer, "APPROVED").await;
-    ctx.db.execute("DELETE FROM courses WHERE id = $1", &[&course.id]).await.unwrap();
+    ctx.db
+        .execute("DELETE FROM courses WHERE id = $1", &[&course.id])
+        .await
+        .unwrap();
     assert!(!ids(&list(&ctx, &viewer, &[("department_id", &dept.id)]).await).contains(&post.id));
-    ctx.get(&format!("/posts/{}", post.id)).auth(&viewer).send().await.expect(200);
+    ctx.get(&format!("/posts/{}", post.id))
+        .auth(&viewer)
+        .send()
+        .await
+        .expect(200);
 }
 
 #[tokio::test]
 async fn detail_shape_and_owner_name() {
     let ctx = Ctx::new().await;
     let viewer = ctx.user().await;
-    let named = ctx.create_user(NewUser { readable_name: Some("陳同學".into()), ..Default::default() }).await;
+    let named = ctx
+        .create_user(NewUser {
+            readable_name: Some("陳同學".into()),
+            ..Default::default()
+        })
+        .await;
     let unnamed = ctx.create_user(NewUser::default()).await;
     let dept = ctx.department(true).await;
     let course = ctx.course(&dept).await;
     let p1 = ctx.seed_post(&course, &named, "APPROVED").await;
     let p2 = ctx.seed_post(&course, &unnamed, "APPROVED").await;
-    let p3 = ctx.create_post(&course, &named, NewPost { anonymous: true, ..Default::default() }).await;
+    let p3 = ctx
+        .create_post(
+            &course,
+            &named,
+            NewPost {
+                anonymous: true,
+                ..Default::default()
+            },
+        )
+        .await;
     ctx.post_file(&p1, "http://files.example/a.pdf").await;
 
-    let body = ctx.get(&format!("/posts/{}", p1.id)).auth(&viewer).send().await.json();
+    let body = ctx
+        .get(&format!("/posts/{}", p1.id))
+        .auth(&viewer)
+        .send()
+        .await
+        .json();
     assert_keys(&body, &with_keys(POST_ROW_KEYS, &["files", "owner_name"]));
     assert_eq!(body["owner_name"], json!("陳同學"));
     assert_eq!(body["owner_id"], json!(named.id));
@@ -434,11 +627,21 @@ async fn detail_shape_and_owner_name() {
     assert_eq!(body["status"], json!("APPROVED"));
     assert_ts_offset(&body["create_time"]);
 
-    let body = ctx.get(&format!("/posts/{}", p2.id)).auth(&viewer).send().await.json();
+    let body = ctx
+        .get(&format!("/posts/{}", p2.id))
+        .auth(&viewer)
+        .send()
+        .await
+        .json();
     assert_eq!(body["owner_name"], json!(unnamed.username));
     assert_eq!(body["files"], json!([]));
 
-    let body = ctx.get(&format!("/posts/{}", p3.id)).auth(&viewer).send().await.json();
+    let body = ctx
+        .get(&format!("/posts/{}", p3.id))
+        .auth(&viewer)
+        .send()
+        .await
+        .json();
     assert_eq!(body["owner_name"], json!("匿名用戶"));
     assert_eq!(body["owner_id"], json!("anonymous"));
 }
@@ -455,10 +658,22 @@ async fn detail_visibility() {
     let others_pending = ctx.seed_post(&course, &other, "PENDING").await;
     let own_pending = ctx.seed_post(&course, &viewer, "PENDING").await;
     let hidden_post = ctx.seed_post(&hidden_course, &other, "APPROVED").await;
-    let orphan_owner = ctx.seed_post(&course, &User { id: "ghost".into(), username: "ghost".into(), password: None }, "APPROVED").await;
+    let orphan_owner = ctx
+        .seed_post(
+            &course,
+            &User {
+                id: "ghost".into(),
+                username: "ghost".into(),
+                password: None,
+            },
+            "APPROVED",
+        )
+        .await;
 
     let get = |id: &str| ctx.get(&format!("/posts/{id}")).auth(&viewer).send();
-    get(&others_pending.id).await.expect_detail(404, "Not Found");
+    get(&others_pending.id)
+        .await
+        .expect_detail(404, "Not Found");
     get(&own_pending.id).await.expect(200);
     get(&hidden_post.id).await.expect_detail(404, "Not Found");
     get("no-such-post").await.expect_detail(404, "Not Found");
@@ -466,9 +681,17 @@ async fn detail_visibility() {
 
     let admin = ctx.user().await;
     ctx.admin_of(&admin, &public).await;
-    ctx.get(&format!("/posts/{}", others_pending.id)).auth(&admin).send().await.expect(200);
+    ctx.get(&format!("/posts/{}", others_pending.id))
+        .auth(&admin)
+        .send()
+        .await
+        .expect(200);
     let root = ctx.super_user().await;
-    ctx.get(&format!("/posts/{}", hidden_post.id)).auth(&root).send().await.expect(200);
+    ctx.get(&format!("/posts/{}", hidden_post.id))
+        .auth(&root)
+        .send()
+        .await
+        .expect(200);
 }
 
 #[tokio::test]
@@ -483,13 +706,34 @@ async fn status_update_by_department_admin() {
     let post = ctx.seed_post(&course, &author, "PENDING").await;
 
     // Warm the author's and the course caches.
-    ctx.get(&format!("/posts/{}", post.id)).auth(&author).send().await.expect(200);
-    assert_eq!(ctx.get(&format!("/courses/{}", course.id)).auth(&author).send().await.json()["posts"], json!([]));
-    let dept_courses = ctx.get(&format!("/departments/{}/courses", dept.id)).auth(&author).send().await.json();
+    ctx.get(&format!("/posts/{}", post.id))
+        .auth(&author)
+        .send()
+        .await
+        .expect(200);
+    assert_eq!(
+        ctx.get(&format!("/courses/{}", course.id))
+            .auth(&author)
+            .send()
+            .await
+            .json()["posts"],
+        json!([])
+    );
+    let dept_courses = ctx
+        .get(&format!("/departments/{}/courses", dept.id))
+        .auth(&author)
+        .send()
+        .await
+        .json();
     assert_eq!(dept_courses[0]["has_posts"], json!(false));
 
     let path = format!("/posts/status/{}/{}", dept.id, post.id);
-    let resp = ctx.put(&path).auth(&admin).form(&[("status", "APPROVED")]).send().await;
+    let resp = ctx
+        .put(&path)
+        .auth(&admin)
+        .form(&[("status", "APPROVED")])
+        .send()
+        .await;
     resp.expect(200);
     let body = resp.json();
     assert_keys(&body, &with_keys(POST_ROW_KEYS, &["files", "owner_name"]));
@@ -499,15 +743,41 @@ async fn status_update_by_department_admin() {
 
     // Invalidated caches.
     assert_eq!(
-        ctx.get(&format!("/posts/{}", post.id)).auth(&author).send().await.json()["status"],
+        ctx.get(&format!("/posts/{}", post.id))
+            .auth(&author)
+            .send()
+            .await
+            .json()["status"],
         json!("APPROVED")
     );
-    assert_eq!(ids(&ctx.get(&format!("/courses/{}", course.id)).auth(&author).send().await.json()["posts"]), vec![post.id.clone()]);
-    let dept_courses = ctx.get(&format!("/departments/{}/courses", dept.id)).auth(&author).send().await.json();
+    assert_eq!(
+        ids(&ctx
+            .get(&format!("/courses/{}", course.id))
+            .auth(&author)
+            .send()
+            .await
+            .json()["posts"]),
+        vec![post.id.clone()]
+    );
+    let dept_courses = ctx
+        .get(&format!("/departments/{}/courses", dept.id))
+        .auth(&author)
+        .send()
+        .await
+        .json();
     assert_eq!(dept_courses[0]["has_posts"], json!(true));
 
-    ctx.put(&path).auth(&admin).form(&[("status", "REJECTED")]).send().await.expect(200);
-    let status: String = ctx.row("SELECT status FROM posts WHERE id = $1", &[&post.id]).await.unwrap().get(0);
+    ctx.put(&path)
+        .auth(&admin)
+        .form(&[("status", "REJECTED")])
+        .send()
+        .await
+        .expect(200);
+    let status: String = ctx
+        .row("SELECT status FROM posts WHERE id = $1", &[&post.id])
+        .await
+        .unwrap()
+        .get(0);
     assert_eq!(status, "REJECTED");
 }
 
@@ -547,7 +817,11 @@ async fn status_update_errors() {
         .send()
         .await
         .expect_validation(&["body", "status"], Some("missing"));
-    let status: String = ctx.row("SELECT status FROM posts WHERE id = $1", &[&foreign.id]).await.unwrap().get(0);
+    let status: String = ctx
+        .row("SELECT status FROM posts WHERE id = $1", &[&foreign.id])
+        .await
+        .unwrap()
+        .get(0);
     assert_eq!(status, "PENDING");
 }
 
@@ -559,14 +833,21 @@ async fn status_update_without_a_department_row_commits_then_404s() {
     let dept = ctx.department(true).await;
     let course = ctx.course(&dept).await;
     let post = ctx.seed_post(&course, &author, "PENDING").await;
-    ctx.db.execute("DELETE FROM departments WHERE id = $1", &[&dept.id]).await.unwrap();
+    ctx.db
+        .execute("DELETE FROM departments WHERE id = $1", &[&dept.id])
+        .await
+        .unwrap();
     ctx.put(&format!("/posts/status/{}/{}", dept.id, post.id))
         .auth(&root)
         .form(&[("status", "APPROVED")])
         .send()
         .await
         .expect_detail(404, "Not Found");
-    let status: String = ctx.row("SELECT status FROM posts WHERE id = $1", &[&post.id]).await.unwrap().get(0);
+    let status: String = ctx
+        .row("SELECT status FROM posts WHERE id = $1", &[&post.id])
+        .await
+        .unwrap()
+        .get(0);
     assert_eq!(status, "APPROVED");
 }
 
@@ -583,7 +864,14 @@ async fn unchanged_status_does_not_touch_updated_time() {
         .send()
         .await
         .expect(200);
-    let touched: bool = ctx.row("SELECT updated_time IS NOT NULL FROM posts WHERE id = $1", &[&post.id]).await.unwrap().get(0);
+    let touched: bool = ctx
+        .row(
+            "SELECT updated_time IS NOT NULL FROM posts WHERE id = $1",
+            &[&post.id],
+        )
+        .await
+        .unwrap()
+        .get(0);
     assert!(!touched, "no-op update must not set updated_time");
 }
 
@@ -593,7 +881,11 @@ async fn status_update_returns_null_when_owner_is_missing() {
     let admin = ctx.super_user().await;
     let dept = ctx.department(true).await;
     let course = ctx.course(&dept).await;
-    let ghost = User { id: uid("ghost"), username: "ghost".into(), password: None };
+    let ghost = User {
+        id: uid("ghost"),
+        username: "ghost".into(),
+        password: None,
+    };
     let post = ctx.seed_post(&course, &ghost, "PENDING").await;
     let resp = ctx
         .put(&format!("/posts/status/{}/{}", dept.id, post.id))
@@ -620,26 +912,79 @@ async fn delete_by_admin_removes_rows_objects_and_cached_views() {
         .send()
         .await;
     let post_id = resp.json()["post_id"].as_str().unwrap().to_string();
-    let detail = ctx.get(&format!("/posts/{post_id}")).auth(&author).send().await.json();
+    let detail = ctx
+        .get(&format!("/posts/{post_id}"))
+        .auth(&author)
+        .send()
+        .await
+        .json();
     let url = detail["files"][0].as_str().unwrap().to_string();
     ctx.fetch_object(&url).await.expect(200);
-    assert_eq!(ids(&ctx.get(&format!("/courses/{}", course.id)).auth(&author).send().await.json()["posts"]), vec![post_id.clone()]);
+    assert_eq!(
+        ids(&ctx
+            .get(&format!("/courses/{}", course.id))
+            .auth(&author)
+            .send()
+            .await
+            .json()["posts"]),
+        vec![post_id.clone()]
+    );
     let dept_courses = format!("/departments/{}/courses", dept.id);
-    assert_eq!(ctx.get(&dept_courses).auth(&author).send().await.json()[0]["has_posts"], json!(true));
+    assert_eq!(
+        ctx.get(&dept_courses).auth(&author).send().await.json()[0]["has_posts"],
+        json!(true)
+    );
 
-    ctx.delete(&format!("/posts/{post_id}")).auth(&author).send().await.expect_detail(403, "Forbidden");
+    ctx.delete(&format!("/posts/{post_id}"))
+        .auth(&author)
+        .send()
+        .await
+        .expect_detail(403, "Forbidden");
 
-    let resp = ctx.delete(&format!("/posts/{post_id}")).auth(&admin).send().await;
+    let resp = ctx
+        .delete(&format!("/posts/{post_id}"))
+        .auth(&admin)
+        .send()
+        .await;
     resp.expect(200);
     assert_eq!(resp.json(), json!({"status": "success"}));
-    assert_eq!(ctx.scalar_i64("SELECT count(*) FROM posts WHERE id = $1", &[&post_id]).await, 0);
-    assert_eq!(ctx.scalar_i64("SELECT count(*) FROM posts_files WHERE post_id = $1", &[&post_id]).await, 0);
+    assert_eq!(
+        ctx.scalar_i64("SELECT count(*) FROM posts WHERE id = $1", &[&post_id])
+            .await,
+        0
+    );
+    assert_eq!(
+        ctx.scalar_i64(
+            "SELECT count(*) FROM posts_files WHERE post_id = $1",
+            &[&post_id]
+        )
+        .await,
+        0
+    );
     assert_eq!(ctx.fetch_object(&url).await.status, 404);
-    ctx.get(&format!("/posts/{post_id}")).auth(&author).send().await.expect(404);
-    assert_eq!(ctx.get(&format!("/courses/{}", course.id)).auth(&author).send().await.json()["posts"], json!([]));
-    assert_eq!(ctx.get(&dept_courses).auth(&author).send().await.json()[0]["has_posts"], json!(false));
+    ctx.get(&format!("/posts/{post_id}"))
+        .auth(&author)
+        .send()
+        .await
+        .expect(404);
+    assert_eq!(
+        ctx.get(&format!("/courses/{}", course.id))
+            .auth(&author)
+            .send()
+            .await
+            .json()["posts"],
+        json!([])
+    );
+    assert_eq!(
+        ctx.get(&dept_courses).auth(&author).send().await.json()[0]["has_posts"],
+        json!(false)
+    );
 
-    ctx.delete(&format!("/posts/{post_id}")).auth(&admin).send().await.expect_detail(404, "Post not found");
+    ctx.delete(&format!("/posts/{post_id}"))
+        .auth(&admin)
+        .send()
+        .await
+        .expect_detail(404, "Post not found");
 }
 
 #[tokio::test]
@@ -659,7 +1004,11 @@ async fn delete_by_super_user_and_permission_errors() {
         .send()
         .await
         .expect_detail(403, "Forbidden");
-    ctx.delete(&format!("/posts/{}", post.id)).auth(&root).send().await.expect(200);
+    ctx.delete(&format!("/posts/{}", post.id))
+        .auth(&root)
+        .send()
+        .await
+        .expect(200);
 }
 
 #[tokio::test]

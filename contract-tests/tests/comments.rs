@@ -19,7 +19,11 @@ async fn fixture() -> Fixture {
 }
 
 fn find<'a>(list: &'a Value, id: &str) -> &'a Value {
-    list.as_array().unwrap().iter().find(|c| c["id"] == json!(id)).unwrap()
+    list.as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["id"] == json!(id))
+        .unwrap()
 }
 
 #[tokio::test]
@@ -27,7 +31,12 @@ async fn create_top_level_and_reply() {
     let Fixture { ctx, owner, thread } = fixture().await;
     let path = format!("/threads/{}/comments", thread.id);
 
-    let resp = ctx.post(&path).auth(&owner).form(&[("content", "第一樓")]).send().await;
+    let resp = ctx
+        .post(&path)
+        .auth(&owner)
+        .form(&[("content", "第一樓")])
+        .send()
+        .await;
     resp.expect(200);
     let body = resp.json();
     assert_keys(&body, &["status", "comment_id"]);
@@ -36,7 +45,11 @@ async fn create_top_level_and_reply() {
     let reply = ctx
         .post(&path)
         .auth(&owner)
-        .form(&[("content", "回覆"), ("parent_comment_id", &root), ("is_anonymous", "true")])
+        .form(&[
+            ("content", "回覆"),
+            ("parent_comment_id", &root),
+            ("is_anonymous", "true"),
+        ])
         .send()
         .await
         .json()["comment_id"]
@@ -48,7 +61,10 @@ async fn create_top_level_and_reply() {
         .await
         .unwrap();
     assert_eq!(row.get::<_, String>(0), thread.id);
-    assert_eq!(row.get::<_, Option<String>>(1).as_deref(), Some(root.as_str()));
+    assert_eq!(
+        row.get::<_, Option<String>>(1).as_deref(),
+        Some(root.as_str())
+    );
     assert_eq!(row.get::<_, String>(2), "回覆");
     assert_eq!(row.get::<_, String>(3), owner.id);
     assert_eq!(row.get::<_, Option<bool>>(4), Some(true));
@@ -109,7 +125,10 @@ async fn empty_parent_comment_id_creates_top_level_comment() {
     resp.expect(200);
     let id = resp.json()["comment_id"].as_str().unwrap().to_string();
     let parent: Option<String> = ctx
-        .row("SELECT parent_comment_id FROM thread_comments WHERE id = $1", &[&id])
+        .row(
+            "SELECT parent_comment_id FROM thread_comments WHERE id = $1",
+            &[&id],
+        )
         .await
         .unwrap()
         .get(0);
@@ -119,17 +138,38 @@ async fn empty_parent_comment_id_creates_top_level_comment() {
 #[tokio::test]
 async fn list_top_level_comments() {
     let Fixture { ctx, owner, thread } = fixture().await;
-    let viewer = ctx.create_user(NewUser { readable_name: Some("讀者".into()), ..Default::default() }).await;
-    let first = ctx.create_comment(&thread, &viewer, None, None, Some("2025-01-01T00:00:00Z")).await;
-    let second = ctx.create_comment(&thread, &owner, None, None, Some("2025-02-01T00:00:00Z")).await;
+    let viewer = ctx
+        .create_user(NewUser {
+            readable_name: Some("讀者".into()),
+            ..Default::default()
+        })
+        .await;
+    let first = ctx
+        .create_comment(&thread, &viewer, None, None, Some("2025-01-01T00:00:00Z"))
+        .await;
+    let second = ctx
+        .create_comment(&thread, &owner, None, None, Some("2025-02-01T00:00:00Z"))
+        .await;
     ctx.comment(&thread, &owner, Some(&first)).await;
     ctx.comment(&thread, &owner, Some(&first)).await;
-    ctx.post(&format!("/threads/comments/{second}/like")).auth(&viewer).send().await.expect(200);
+    ctx.post(&format!("/threads/comments/{second}/like"))
+        .auth(&viewer)
+        .send()
+        .await
+        .expect(200);
 
-    let resp = ctx.get(&format!("/threads/{}/comments", thread.id)).auth(&viewer).send().await;
+    let resp = ctx
+        .get(&format!("/threads/{}/comments", thread.id))
+        .auth(&viewer)
+        .send()
+        .await;
     resp.expect(200);
     let body = resp.json();
-    assert_eq!(ids(&body), vec![first.clone(), second.clone()], "top level only, create_time ASC");
+    assert_eq!(
+        ids(&body),
+        vec![first.clone(), second.clone()],
+        "top level only, create_time ASC"
+    );
     for c in body.as_array().unwrap() {
         assert_keys(c, COMMENT_KEYS);
         assert_ts_z(&c["create_time"]);
@@ -161,13 +201,47 @@ async fn list_top_level_comments() {
 async fn comment_detail_returns_nested_reply_tree() {
     let Fixture { ctx, owner, thread } = fixture().await;
     let other = ctx.user().await;
-    let root = ctx.create_comment(&thread, &owner, None, None, Some("2025-01-01T00:00:00Z")).await;
-    let a = ctx.create_comment(&thread, &other, Some(&root), None, Some("2025-01-02T00:00:00Z")).await;
-    let b = ctx.create_comment(&thread, &other, Some(&root), None, Some("2025-01-03T00:00:00Z")).await;
-    let a1 = ctx.create_comment(&thread, &owner, Some(&a), None, Some("2025-01-04T00:00:00Z")).await;
-    ctx.post(&format!("/threads/comments/{a1}/like")).auth(&owner).send().await.expect(200);
+    let root = ctx
+        .create_comment(&thread, &owner, None, None, Some("2025-01-01T00:00:00Z"))
+        .await;
+    let a = ctx
+        .create_comment(
+            &thread,
+            &other,
+            Some(&root),
+            None,
+            Some("2025-01-02T00:00:00Z"),
+        )
+        .await;
+    let b = ctx
+        .create_comment(
+            &thread,
+            &other,
+            Some(&root),
+            None,
+            Some("2025-01-03T00:00:00Z"),
+        )
+        .await;
+    let a1 = ctx
+        .create_comment(
+            &thread,
+            &owner,
+            Some(&a),
+            None,
+            Some("2025-01-04T00:00:00Z"),
+        )
+        .await;
+    ctx.post(&format!("/threads/comments/{a1}/like"))
+        .auth(&owner)
+        .send()
+        .await
+        .expect(200);
 
-    let resp = ctx.get(&format!("/threads/comments/{root}")).auth(&owner).send().await;
+    let resp = ctx
+        .get(&format!("/threads/comments/{root}"))
+        .auth(&owner)
+        .send()
+        .await;
     resp.expect(200);
     let body = resp.json();
     assert_keys(&body, COMMENT_KEYS);
@@ -186,10 +260,19 @@ async fn comment_detail_returns_nested_reply_tree() {
     assert_eq!(body["replies"][1]["replies"], json!([]));
 
     // A reply can be the root of a detail request too.
-    let sub = ctx.get(&format!("/threads/comments/{a}")).auth(&owner).send().await.json();
+    let sub = ctx
+        .get(&format!("/threads/comments/{a}"))
+        .auth(&owner)
+        .send()
+        .await
+        .json();
     assert_eq!(ids(&sub["replies"]), vec![a1]);
 
-    ctx.get("/threads/comments/no-such-comment").auth(&owner).send().await.expect_detail(404, "Comment not found");
+    ctx.get("/threads/comments/no-such-comment")
+        .auth(&owner)
+        .send()
+        .await
+        .expect_detail(404, "Comment not found");
 }
 
 #[tokio::test]
@@ -200,7 +283,12 @@ async fn comment_detail_depth_is_limited_to_ten_levels() {
     for _ in 0..12 {
         parent = ctx.comment(&thread, &owner, Some(&parent)).await;
     }
-    let body = ctx.get(&format!("/threads/comments/{root}")).auth(&owner).send().await.json();
+    let body = ctx
+        .get(&format!("/threads/comments/{root}"))
+        .auth(&owner)
+        .send()
+        .await
+        .json();
     let mut depth = 0;
     let mut node = &body;
     while let Some(child) = node["replies"].as_array().and_then(|r| r.first()) {
@@ -226,7 +314,12 @@ async fn comment_detail_caps_replies_at_500_ordered_by_time_then_id() {
         )
         .await
         .unwrap();
-    let body = ctx.get(&format!("/threads/comments/{root}")).auth(&owner).send().await.json();
+    let body = ctx
+        .get(&format!("/threads/comments/{root}"))
+        .auth(&owner)
+        .send()
+        .await
+        .json();
     let got = ids(&body["replies"]);
     let want: Vec<String> = (0..500).map(|i| format!("{prefix}-{i:04}")).collect();
     assert_eq!(got, want);
@@ -240,22 +333,42 @@ async fn update_comment() {
     let id = ctx.comment(&thread, &owner, None).await;
     let path = format!("/threads/comments/{id}");
 
-    let resp = ctx.put(&path).auth(&owner).form(&[("content", "已修改")]).send().await;
+    let resp = ctx
+        .put(&path)
+        .auth(&owner)
+        .form(&[("content", "已修改")])
+        .send()
+        .await;
     resp.expect(200);
     assert_eq!(resp.json(), json!({"status": "success", "comment_id": id}));
     let body = ctx.get(&path).auth(&owner).send().await.json();
     assert_eq!(body["content"], json!("已修改"));
     assert_ts_z(&body["updated_time"]);
 
-    ctx.put(&path).auth(&other).form(&[("content", "x")]).send().await.expect_detail(403, "Permission denied");
-    ctx.put(&path).auth(&owner).form(&[("other", "x")]).send().await.expect_detail(400, "Content is required");
+    ctx.put(&path)
+        .auth(&other)
+        .form(&[("content", "x")])
+        .send()
+        .await
+        .expect_detail(403, "Permission denied");
+    ctx.put(&path)
+        .auth(&owner)
+        .form(&[("other", "x")])
+        .send()
+        .await
+        .expect_detail(400, "Content is required");
     ctx.put(&path)
         .auth(&owner)
         .form(&[("content", "")])
         .send()
         .await
         .expect_validation(&["body", "content"], Some("string_too_short"));
-    ctx.put("/threads/comments/no-such").auth(&owner).form(&[("content", "x")]).send().await.expect_detail(404, "Comment not found");
+    ctx.put("/threads/comments/no-such")
+        .auth(&owner)
+        .form(&[("content", "x")])
+        .send()
+        .await
+        .expect_detail(404, "Comment not found");
 }
 
 #[tokio::test]
@@ -273,26 +386,65 @@ async fn delete_comment_permissions_and_cascade() {
 
     let c1 = ctx.comment(&thread, &author, None).await;
     let reply = ctx.comment(&thread, &other, Some(&c1)).await;
-    ctx.post(&format!("/threads/comments/{reply}/like")).auth(&author).send().await.expect(200);
+    ctx.post(&format!("/threads/comments/{reply}/like"))
+        .auth(&author)
+        .send()
+        .await
+        .expect(200);
 
     // Neither the thread owner nor other users may delete someone's comment.
-    ctx.delete(&format!("/threads/comments/{c1}")).auth(&thread_owner).send().await.expect_detail(403, "Permission denied");
-    ctx.delete(&format!("/threads/comments/{c1}")).auth(&other).send().await.expect_detail(403, "Permission denied");
+    ctx.delete(&format!("/threads/comments/{c1}"))
+        .auth(&thread_owner)
+        .send()
+        .await
+        .expect_detail(403, "Permission denied");
+    ctx.delete(&format!("/threads/comments/{c1}"))
+        .auth(&other)
+        .send()
+        .await
+        .expect_detail(403, "Permission denied");
 
-    let resp = ctx.delete(&format!("/threads/comments/{c1}")).auth(&author).send().await;
+    let resp = ctx
+        .delete(&format!("/threads/comments/{c1}"))
+        .auth(&author)
+        .send()
+        .await;
     resp.expect(200);
     assert_eq!(resp.json(), json!({"status": "success"}));
     assert_eq!(
-        ctx.scalar_i64("SELECT count(*) FROM thread_comments WHERE id = ANY($1)", &[&vec![c1.clone(), reply.clone()]]).await,
+        ctx.scalar_i64(
+            "SELECT count(*) FROM thread_comments WHERE id = ANY($1)",
+            &[&vec![c1.clone(), reply.clone()]]
+        )
+        .await,
         0
     );
-    assert_eq!(ctx.scalar_i64("SELECT count(*) FROM comment_likes WHERE comment_id = $1", &[&reply]).await, 0);
+    assert_eq!(
+        ctx.scalar_i64(
+            "SELECT count(*) FROM comment_likes WHERE comment_id = $1",
+            &[&reply]
+        )
+        .await,
+        0
+    );
 
     let c2 = ctx.comment(&thread, &author, None).await;
-    ctx.delete(&format!("/threads/comments/{c2}")).auth(&admin).send().await.expect(200);
+    ctx.delete(&format!("/threads/comments/{c2}"))
+        .auth(&admin)
+        .send()
+        .await
+        .expect(200);
     let c3 = ctx.comment(&thread, &author, None).await;
-    ctx.delete(&format!("/threads/comments/{c3}")).auth(&root_user).send().await.expect(200);
-    ctx.delete(&format!("/threads/comments/{c3}")).auth(&root_user).send().await.expect_detail(404, "Comment not found");
+    ctx.delete(&format!("/threads/comments/{c3}"))
+        .auth(&root_user)
+        .send()
+        .await
+        .expect(200);
+    ctx.delete(&format!("/threads/comments/{c3}"))
+        .auth(&root_user)
+        .send()
+        .await
+        .expect_detail(404, "Comment not found");
 }
 
 #[tokio::test]
@@ -320,7 +472,11 @@ async fn toggle_comment_like() {
     let body = ctx.post(&path).auth(&other).send().await.json();
     assert_eq!(body["liked"], json!(false));
     assert_eq!(body["comment"]["like_count"], json!(0));
-    ctx.post("/threads/comments/no-such/like").auth(&other).send().await.expect_detail(404, "Comment not found");
+    ctx.post("/threads/comments/no-such/like")
+        .auth(&other)
+        .send()
+        .await
+        .expect_detail(404, "Comment not found");
 }
 
 #[tokio::test]
@@ -335,14 +491,38 @@ async fn comment_endpoints_enforce_department_visibility() {
     let comment = ctx.comment(&thread, &member, None).await;
 
     for resp in [
-        ctx.get(&format!("/threads/comments/{comment}")).auth(&outsider).send().await,
-        ctx.put(&format!("/threads/comments/{comment}")).auth(&outsider).form(&[("content", "x")]).send().await,
-        ctx.delete(&format!("/threads/comments/{comment}")).auth(&outsider).send().await,
-        ctx.post(&format!("/threads/comments/{comment}/like")).auth(&outsider).send().await,
-        ctx.post(&format!("/threads/{}/comments", thread.id)).auth(&outsider).form(&[("content", "x")]).send().await,
+        ctx.get(&format!("/threads/comments/{comment}"))
+            .auth(&outsider)
+            .send()
+            .await,
+        ctx.put(&format!("/threads/comments/{comment}"))
+            .auth(&outsider)
+            .form(&[("content", "x")])
+            .send()
+            .await,
+        ctx.delete(&format!("/threads/comments/{comment}"))
+            .auth(&outsider)
+            .send()
+            .await,
+        ctx.post(&format!("/threads/comments/{comment}/like"))
+            .auth(&outsider)
+            .send()
+            .await,
+        ctx.post(&format!("/threads/{}/comments", thread.id))
+            .auth(&outsider)
+            .form(&[("content", "x")])
+            .send()
+            .await,
     ] {
         resp.expect_detail(404, "Department not found");
     }
-    ctx.get(&format!("/threads/comments/{comment}")).send().await.expect(401);
-    ctx.get(&format!("/threads/comments/{comment}")).auth(&member).send().await.expect(200);
+    ctx.get(&format!("/threads/comments/{comment}"))
+        .send()
+        .await
+        .expect(401);
+    ctx.get(&format!("/threads/comments/{comment}"))
+        .auth(&member)
+        .send()
+        .await
+        .expect(200);
 }

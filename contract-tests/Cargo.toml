@@ -3,7 +3,7 @@ name = "past-exam-contract-tests"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Black-box HTTP contract tests for the NTPU Past Exam backend (Python reference and Rust rewrite)"
+description = "Black-box HTTP contract tests for the NTPU Past Exam backend"
 
 [lib]
 path = "src/lib.rs"

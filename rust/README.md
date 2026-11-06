@@ -9,7 +9,7 @@ Axum 0.8 + Tokio, SQLx (PostgreSQL), Redis (`redis`), `jsonwebtoken` (HS256),
 Only three things are implemented by hand because no crate matches the
 contract: the FastAPI-compatible form/multipart extractor, the
 Starlette-compatible CORS preflight response, and the Redis Lua scripts that
-share refresh-session and rate-limit keys with the Python implementation.
+share refresh-session and rate-limit keys with the legacy backend.
 
 ## Run
 

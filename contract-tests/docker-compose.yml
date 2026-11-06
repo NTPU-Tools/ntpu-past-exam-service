@@ -2,41 +2,10 @@
 #
 #   docker compose -p pe-contract -f contract-tests/docker-compose.yml up -d --build --wait
 #
-# The `reference` service runs the current Python backend so the suite can be
-# validated against known-good behaviour. A Rust implementation under test can
-# reuse the same postgres/redis/minio services with the environment listed in
-# contract-tests/contract.env (see contract-tests/README.md).
-name: pe-contract
+# `schema` creates the database schema with the Rust migrator. Start the service
+# under test on the host with contract-tests/contract.env, then run the tests.
 
-x-backend-env: &backend-env
-  DATABASE_DRIVER: postgresql+psycopg
-  DATABASE_HOST: postgres
-  DATABASE_PORT: "5432"
-  DATABASE_USERNAME: contract
-  DATABASE_PASSWORD: contract
-  DATABASE: past_exam_contract
-  REDIS_HOST: redis
-  REDIS_PORT: "6379"
-  REDIS_PASSWORD: ""
-  R2_URL: http://minio:9000
-  R2_ACCESS_KEY: contractadmin
-  R2_ACCESS_TOKEN: contractadmin
-  R2_BUCKET_NAME: past-exam-contract
-  R2_FILE_PATH: http://127.0.0.1:59000/past-exam-contract
-  HASH_KEY: contract-test-secret-key
-  ORIGIN: http://contract.test
-  AUTH_ALLOWED_ORIGINS: http://contract.test,http://localhost:5173
-  AUTH_COOKIE_SECURE: "false"
-  AUTH_ALLOW_LEGACY_REFRESH_BEARER: "true"
-  AUTH_RATE_LIMIT_REQUESTS: "5"
-  AUTH_RATE_LIMIT_GLOBAL_REQUESTS: "40"
-  AUTH_RATE_LIMIT_WINDOW_SECONDS: "60"
-  AUTH_RATE_LIMIT_TRUST_PROXY_HEADERS: "true"
-  AUTH_RATE_LIMIT_TRUSTED_PROXY_CIDRS: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,::1/128
-  GOOGLE_SERVICE_CLIENT_ID: placeholder
-  GOOGLE_SERVICE_SERCET: placeholder
-  SERVICE_NAME: contract
-  COMMIT_SHA: contract-sha
+name: pe-contract
 
 services:
   postgres:
@@ -93,32 +62,17 @@ services:
       mcli anonymous set download local/past-exam-contract
       "
 
-  # Creates the production schema exactly the way production PostgreSQL was
-  # created (SQLAlchemy metadata + Alembic stamp), then exits.
   schema:
     build:
-      context: ..
+      context: ../rust
       dockerfile: Dockerfile
-    environment: *backend-env
-    command: ["python", "contract-tests/reference/create_schema.py"]
-    volumes:
-      - ./reference:/app/contract-tests/reference:ro
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_USERNAME: contract
+      DATABASE_PASSWORD: contract
+      DATABASE: past_exam_contract
+    command: ["migrate"]
     depends_on:
       postgres:
         condition: service_healthy
-
-  reference:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    environment: *backend-env
-    command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
-    ports:
-      - "127.0.0.1:58080:8080"
-    depends_on:
-      schema:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully

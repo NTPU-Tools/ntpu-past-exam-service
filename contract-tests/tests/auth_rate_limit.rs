@@ -24,8 +24,15 @@ async fn failed_login(ctx: &Ctx, username: &str) -> Resp {
 #[track_caller]
 fn assert_limited(resp: &Resp) {
     resp.expect_detail(429, "Too many authentication attempts");
-    let retry: u64 = resp.header("retry-after").expect("Retry-After").parse().unwrap();
-    assert!((1..=config().rate_limit_window).contains(&retry), "Retry-After {retry}");
+    let retry: u64 = resp
+        .header("retry-after")
+        .expect("Retry-After")
+        .parse()
+        .unwrap();
+    assert!(
+        (1..=config().rate_limit_window).contains(&retry),
+        "Retry-After {retry}"
+    );
 }
 
 #[tokio::test]
@@ -67,7 +74,11 @@ async fn username_subject_is_trimmed_and_casefolded() {
     let ctx = Ctx::new().await;
     let name = uid("rl-case");
     for i in 0..subject_limit() {
-        let variant = if i % 2 == 0 { format!("  {name}  ") } else { name.to_uppercase() };
+        let variant = if i % 2 == 0 {
+            format!("  {name}  ")
+        } else {
+            name.to_uppercase()
+        };
         failed_login(&ctx, &variant).await.expect(400);
     }
     assert_limited(&failed_login(&ctx, &name).await);
@@ -117,7 +128,11 @@ async fn requests_with_missing_fields_still_count() {
     ensure_rate_window_headroom(30).await;
     let ctx = Ctx::new().await;
     for _ in 0..global_limit() {
-        ctx.post("/exchange").form(&[("code", "c")]).send().await.expect(422);
+        ctx.post("/exchange")
+            .form(&[("code", "c")])
+            .send()
+            .await
+            .expect(422);
     }
     assert_limited(&ctx.post("/exchange").form(&[("code", "c")]).send().await);
 }
@@ -174,7 +189,10 @@ async fn redis_counters_use_the_shared_key_format() {
     assert_eq!(ctx.redis_get(&global).await.as_deref(), Some("2"));
     assert_eq!(ctx.redis_get(&subject).await.as_deref(), Some("2"));
     let ttl = ctx.redis_ttl(&global).await;
-    assert!(ttl >= 1 && ttl as u64 <= config().rate_limit_window, "ttl {ttl}");
+    assert!(
+        ttl >= 1 && ttl as u64 <= config().rate_limit_window,
+        "ttl {ttl}"
+    );
 }
 
 #[tokio::test]

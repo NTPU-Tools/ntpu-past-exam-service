@@ -16,12 +16,18 @@ async fn course_list_is_limited_to_visible_departments_and_brief() {
     let c_hidden = ctx.course(&hidden).await;
 
     let all = ctx.get_all_pages("/courses", &user).await;
-    let listed: Vec<String> = all.iter().map(|c| c["id"].as_str().unwrap().to_string()).collect();
+    let listed: Vec<String> = all
+        .iter()
+        .map(|c| c["id"].as_str().unwrap().to_string())
+        .collect();
     assert!(listed.contains(&c_public.id));
     assert!(listed.contains(&c_member.id));
     assert!(!listed.contains(&c_hidden.id));
     let item = all.iter().find(|c| c["id"] == json!(c_member.id)).unwrap();
-    assert_eq!(item, &json!({"id": c_member.id, "name": c_member.name, "category": "required"}));
+    assert_eq!(
+        item,
+        &json!({"id": c_member.id, "name": c_member.name, "category": "required"})
+    );
 
     let admin = ctx.super_user().await;
     let all = ctx.get_all_pages("/courses", &admin).await;
@@ -39,13 +45,35 @@ async fn list_pagination_is_clamped() {
     ctx.bulletin(&dept).await;
 
     for path in ["/courses", "/bulletins"] {
-        let one = ctx.get(path).auth(&user).query(&[("limit", "0")]).send().await;
+        let one = ctx
+            .get(path)
+            .auth(&user)
+            .query(&[("limit", "0")])
+            .send()
+            .await;
         one.expect(200);
-        assert_eq!(one.json().as_array().unwrap().len(), 1, "{path} limit=0 clamps to 1");
-        let many = ctx.get(path).auth(&user).query(&[("limit", "1000"), ("skip", "-5")]).send().await;
+        assert_eq!(
+            one.json().as_array().unwrap().len(),
+            1,
+            "{path} limit=0 clamps to 1"
+        );
+        let many = ctx
+            .get(path)
+            .auth(&user)
+            .query(&[("limit", "1000"), ("skip", "-5")])
+            .send()
+            .await;
         many.expect(200);
-        assert!(many.json().as_array().unwrap().len() <= 100, "{path} limit clamps to 100");
-        ctx.get(path).auth(&user).query(&[("skip", "99999999")]).send().await.expect(200);
+        assert!(
+            many.json().as_array().unwrap().len() <= 100,
+            "{path} limit clamps to 100"
+        );
+        ctx.get(path)
+            .auth(&user)
+            .query(&[("skip", "99999999")])
+            .send()
+            .await
+            .expect(200);
         ctx.get(path)
             .auth(&user)
             .query(&[("limit", "x")])
@@ -65,7 +93,11 @@ async fn course_detail_lists_only_approved_posts_without_owner_or_status() {
     ctx.seed_post(&course, &user, "PENDING").await;
     ctx.seed_post(&course, &user, "REJECTED").await;
 
-    let resp = ctx.get(&format!("/courses/{}", course.id)).auth(&user).send().await;
+    let resp = ctx
+        .get(&format!("/courses/{}", course.id))
+        .auth(&user)
+        .send()
+        .await;
     resp.expect(200);
     let body = resp.json();
     assert_keys(&body, &["course", "posts"]);
@@ -91,9 +123,17 @@ async fn course_detail_visibility() {
     let course = ctx.course(&private).await;
 
     let path = format!("/courses/{}", course.id);
-    ctx.get(&path).auth(&outsider).send().await.expect_detail(404, "Department not found");
+    ctx.get(&path)
+        .auth(&outsider)
+        .send()
+        .await
+        .expect_detail(404, "Department not found");
     ctx.get(&path).auth(&member).send().await.expect(200);
-    ctx.get("/courses/no-such-course").auth(&member).send().await.expect_detail(404, "Course not found");
+    ctx.get("/courses/no-such-course")
+        .auth(&member)
+        .send()
+        .await
+        .expect_detail(404, "Course not found");
 }
 
 #[tokio::test]
@@ -104,7 +144,14 @@ async fn create_course_as_department_admin() {
     ctx.admin_of(&admin, &dept).await;
 
     // Warm caches first so the test also proves invalidation.
-    assert_eq!(ctx.get(&format!("/departments/{}/courses", dept.id)).auth(&admin).send().await.json(), json!([]));
+    assert_eq!(
+        ctx.get(&format!("/departments/{}/courses", dept.id))
+            .auth(&admin)
+            .send()
+            .await
+            .json(),
+        json!([])
+    );
     let before = ctx.get_all_pages("/courses", &admin).await.len();
 
     let resp = ctx
@@ -123,7 +170,12 @@ async fn create_course_as_department_admin() {
     let id = body["id"].as_str().unwrap().to_string();
     assert!(uuid::Uuid::parse_str(&id).is_ok());
 
-    let dept_courses = ctx.get(&format!("/departments/{}/courses", dept.id)).auth(&admin).send().await.json();
+    let dept_courses = ctx
+        .get(&format!("/departments/{}/courses", dept.id))
+        .auth(&admin)
+        .send()
+        .await
+        .json();
     assert_eq!(ids(&dept_courses), vec![id.clone()]);
     assert_eq!(dept_courses[0]["has_posts"], json!(false));
     let after = ctx.get_all_pages("/courses", &admin).await;
@@ -169,11 +221,23 @@ async fn bulletin_list_and_detail_visibility() {
     assert_keys(item, BULLETIN_KEYS);
     assert_ts_offset(&item["create_time"]);
 
-    let resp = ctx.get(&format!("/bulletins/{b_public}")).auth(&user).send().await;
+    let resp = ctx
+        .get(&format!("/bulletins/{b_public}"))
+        .auth(&user)
+        .send()
+        .await;
     resp.expect(200);
     assert_keys(&resp.json(), BULLETIN_KEYS);
-    ctx.get(&format!("/bulletins/{b_hidden}")).auth(&user).send().await.expect_detail(404, "Department not found");
-    ctx.get("/bulletins/no-such-bulletin").auth(&user).send().await.expect_detail(404, "Bulletin not found");
+    ctx.get(&format!("/bulletins/{b_hidden}"))
+        .auth(&user)
+        .send()
+        .await
+        .expect_detail(404, "Department not found");
+    ctx.get("/bulletins/no-such-bulletin")
+        .auth(&user)
+        .send()
+        .await
+        .expect_detail(404, "Bulletin not found");
 }
 
 #[tokio::test]
@@ -185,8 +249,15 @@ async fn create_bulletin_as_department_admin() {
     ctx.admin_of(&admin, &dept).await;
     ctx.member(&member, &dept).await;
     let dept_path = format!("/departments/{}/bulletins", dept.id);
-    assert_eq!(ctx.get(&dept_path).auth(&member).send().await.json(), json!([]));
-    assert!(!ctx.get_all_pages("/bulletins", &member).await.iter().any(|b| b["department_id"] == json!(dept.id)));
+    assert_eq!(
+        ctx.get(&dept_path).auth(&member).send().await.json(),
+        json!([])
+    );
+    assert!(!ctx
+        .get_all_pages("/bulletins", &member)
+        .await
+        .iter()
+        .any(|b| b["department_id"] == json!(dept.id)));
 
     let resp = ctx
         .post(&format!("/bulletins/{}", dept.id))
@@ -202,8 +273,15 @@ async fn create_bulletin_as_department_admin() {
     assert_eq!(body["department_id"], json!(dept.id));
     let id = body["id"].as_str().unwrap().to_string();
 
-    assert_eq!(ids(&ctx.get(&dept_path).auth(&member).send().await.json()), vec![id.clone()]);
-    assert!(ctx.get_all_pages("/bulletins", &member).await.iter().any(|b| b["id"] == json!(id)));
+    assert_eq!(
+        ids(&ctx.get(&dept_path).auth(&member).send().await.json()),
+        vec![id.clone()]
+    );
+    assert!(ctx
+        .get_all_pages("/bulletins", &member)
+        .await
+        .iter()
+        .any(|b| b["id"] == json!(id)));
 
     ctx.post(&format!("/bulletins/{}", dept.id))
         .auth(&member)

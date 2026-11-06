@@ -10,7 +10,10 @@ async fn ping_returns_json_pong_with_no_store() {
     let resp = ctx.get("/ping").send().await;
     resp.expect(200);
     assert_eq!(resp.json(), json!("pong"));
-    assert!(resp.header("content-type").unwrap().starts_with("application/json"));
+    assert!(resp
+        .header("content-type")
+        .unwrap()
+        .starts_with("application/json"));
     assert_eq!(resp.header("cache-control").as_deref(), Some("no-store"));
 }
 
@@ -42,26 +45,49 @@ async fn wrong_method_is_json_405_with_allow_header() {
 #[tokio::test]
 async fn cors_preflight_for_allowed_origin() {
     let ctx = Ctx::new().await;
-    for origin in ["http://localhost:5173", "https://past-exam.ntpu.cc", config().allowed_origin.as_str()] {
+    for origin in [
+        "http://localhost:5173",
+        "https://past-exam.ntpu.cc",
+        config().allowed_origin.as_str(),
+    ] {
         let resp = ctx
             .req(reqwest::Method::OPTIONS, "/posts")
             .origin(origin)
             .header("Access-Control-Request-Method", "POST")
-            .header("Access-Control-Request-Headers", "authorization,x-csrf-protection")
+            .header(
+                "Access-Control-Request-Headers",
+                "authorization,x-csrf-protection",
+            )
             .send()
             .await;
         resp.expect(200);
-        assert_eq!(resp.header("access-control-allow-origin").as_deref(), Some(origin));
-        assert_eq!(resp.header("access-control-allow-credentials").as_deref(), Some("true"));
+        assert_eq!(
+            resp.header("access-control-allow-origin").as_deref(),
+            Some(origin)
+        );
+        assert_eq!(
+            resp.header("access-control-allow-credentials").as_deref(),
+            Some("true")
+        );
         let methods = resp.header("access-control-allow-methods").unwrap();
         for m in ["DELETE", "GET", "OPTIONS", "PATCH", "POST", "PUT"] {
             assert!(methods.contains(m), "missing {m} in {methods}");
         }
-        let allowed_headers = resp.header("access-control-allow-headers").unwrap().to_lowercase();
+        let allowed_headers = resp
+            .header("access-control-allow-headers")
+            .unwrap()
+            .to_lowercase();
         assert!(allowed_headers.contains("authorization"));
         assert!(allowed_headers.contains("x-csrf-protection"));
-        assert_eq!(resp.header("access-control-max-age").as_deref(), Some("600"));
-        assert!(resp.header_all("vary").join(",").to_lowercase().contains("origin"));
+        assert_eq!(
+            resp.header("access-control-max-age").as_deref(),
+            Some("600")
+        );
+        assert!(resp
+            .header_all("vary")
+            .join(",")
+            .to_lowercase()
+            .contains("origin"));
     }
 }
 
@@ -82,13 +108,22 @@ async fn cors_preflight_for_disallowed_origin_is_rejected() {
 #[tokio::test]
 async fn cors_simple_request_headers() {
     let ctx = Ctx::new().await;
-    let allowed = ctx.get("/ping").origin("https://past-exam.ntpu.xyz").send().await;
+    let allowed = ctx
+        .get("/ping")
+        .origin("https://past-exam.ntpu.xyz")
+        .send()
+        .await;
     allowed.expect(200);
     assert_eq!(
         allowed.header("access-control-allow-origin").as_deref(),
         Some("https://past-exam.ntpu.xyz")
     );
-    assert_eq!(allowed.header("access-control-allow-credentials").as_deref(), Some("true"));
+    assert_eq!(
+        allowed
+            .header("access-control-allow-credentials")
+            .as_deref(),
+        Some("true")
+    );
 
     let denied = ctx.get("/ping").origin("https://evil.example").send().await;
     denied.expect(200);
@@ -116,7 +151,12 @@ async fn validation_errors_use_the_fastapi_envelope() {
         .await
         .expect_validation(&["query", "skip"], Some("int_parsing"));
 
-    let resp = ctx.post("/posts").auth(&user).form(&[("title", "")]).send().await;
+    let resp = ctx
+        .post("/posts")
+        .auth(&user)
+        .form(&[("title", "")])
+        .send()
+        .await;
     resp.expect_validation(&["body", "title"], Some("string_too_short"))
         .expect_validation(&["body", "course_id"], Some("missing"));
 }
@@ -155,7 +195,15 @@ async fn form_booleans_follow_pydantic_lax_parsing() {
     let thread = ctx.thread(&course, &user).await;
     let path = format!("/threads/{}/comments", thread.id);
 
-    for (raw, expected) in [("YES", true), ("on", true), ("T", true), ("1", true), ("off", false), ("n", false), ("0", false)] {
+    for (raw, expected) in [
+        ("YES", true),
+        ("on", true),
+        ("T", true),
+        ("1", true),
+        ("off", false),
+        ("n", false),
+        ("0", false),
+    ] {
         let resp = ctx
             .post(&path)
             .auth(&user)
@@ -165,7 +213,10 @@ async fn form_booleans_follow_pydantic_lax_parsing() {
         resp.expect(200);
         let id = resp.json()["comment_id"].as_str().unwrap().to_string();
         let row = ctx
-            .row("SELECT is_anonymous FROM thread_comments WHERE id = $1", &[&id])
+            .row(
+                "SELECT is_anonymous FROM thread_comments WHERE id = $1",
+                &[&id],
+            )
             .await
             .unwrap();
         assert_eq!(row.get::<_, bool>(0), expected, "form boolean {raw}");
@@ -231,10 +282,21 @@ async fn timestamps_use_isoformat_outside_threads_and_z_inside() {
         )
         .await;
 
-    let a = ctx.get(&format!("/posts/{}", with_micros.id)).auth(&user).send().await;
-    assert_eq!(a.json()["create_time"], json!("2026-01-02T03:04:05.123456+00:00"));
+    let a = ctx
+        .get(&format!("/posts/{}", with_micros.id))
+        .auth(&user)
+        .send()
+        .await;
+    assert_eq!(
+        a.json()["create_time"],
+        json!("2026-01-02T03:04:05.123456+00:00")
+    );
     assert_eq!(a.json()["updated_time"], json!(null));
-    let b = ctx.get(&format!("/posts/{}", whole_second.id)).auth(&user).send().await;
+    let b = ctx
+        .get(&format!("/posts/{}", whole_second.id))
+        .auth(&user)
+        .send()
+        .await;
     assert_eq!(b.json()["create_time"], json!("2026-01-02T03:04:05+00:00"));
 
     let t1 = ctx
@@ -243,9 +305,20 @@ async fn timestamps_use_isoformat_outside_threads_and_z_inside() {
     let t2 = ctx
         .create_thread(&course, &user, false, Some("2026-01-02T03:04:05Z"))
         .await;
-    let a = ctx.get(&format!("/threads/detail/{}", t1.id)).auth(&user).send().await;
-    assert_eq!(a.json()["create_time"], json!("2026-01-02T03:04:05.120000Z"));
-    let b = ctx.get(&format!("/threads/detail/{}", t2.id)).auth(&user).send().await;
+    let a = ctx
+        .get(&format!("/threads/detail/{}", t1.id))
+        .auth(&user)
+        .send()
+        .await;
+    assert_eq!(
+        a.json()["create_time"],
+        json!("2026-01-02T03:04:05.120000Z")
+    );
+    let b = ctx
+        .get(&format!("/threads/detail/{}", t2.id))
+        .auth(&user)
+        .send()
+        .await;
     assert_eq!(b.json()["create_time"], json!("2026-01-02T03:04:05Z"));
 }
 
@@ -256,11 +329,26 @@ async fn non_ascii_is_emitted_as_raw_utf8() {
     let dept = ctx.department(true).await;
     let course = ctx.course(&dept).await;
     let post = ctx
-        .create_post(&course, &user, NewPost { anonymous: true, ..Default::default() })
+        .create_post(
+            &course,
+            &user,
+            NewPost {
+                anonymous: true,
+                ..Default::default()
+            },
+        )
         .await;
-    let resp = ctx.get(&format!("/posts/{}", post.id)).auth(&user).send().await;
+    let resp = ctx
+        .get(&format!("/posts/{}", post.id))
+        .auth(&user)
+        .send()
+        .await;
     resp.expect(200);
-    assert!(resp.text().contains("匿名用戶"), "expected raw UTF-8: {}", resp.text());
+    assert!(
+        resp.text().contains("匿名用戶"),
+        "expected raw UTF-8: {}",
+        resp.text()
+    );
 }
 
 #[tokio::test]
@@ -277,7 +365,11 @@ async fn repeated_form_fields_take_the_last_value() {
         .await;
     resp.expect(200);
     let id = resp.json()["thread_id"].as_str().unwrap().to_string();
-    let title: String = ctx.row("SELECT title FROM threads WHERE id = $1", &[&id]).await.unwrap().get(0);
+    let title: String = ctx
+        .row("SELECT title FROM threads WHERE id = $1", &[&id])
+        .await
+        .unwrap()
+        .get(0);
     assert_eq!(title, "last");
 }
 

@@ -24,14 +24,6 @@ pub const CSRF_HEADER: &str = "X-CSRF-Protection";
 // Configuration
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Target {
-    /// The Python implementation on `main`.
-    Reference,
-    /// The Rust rewrite; enables tests for deliberate fixes (07-deviations.md F-xx).
-    Rust,
-}
-
 #[derive(Debug)]
 pub struct Config {
     pub base_url: String,
@@ -44,7 +36,6 @@ pub struct Config {
     pub rate_limit_subject: u32,
     pub rate_limit_global: u32,
     pub rate_limit_window: u64,
-    pub target: Target,
 }
 
 fn env_or(name: &str, default: &str) -> String {
@@ -54,7 +45,7 @@ fn env_or(name: &str, default: &str) -> String {
 pub fn config() -> &'static Config {
     static CONFIG: OnceLock<Config> = OnceLock::new();
     CONFIG.get_or_init(|| Config {
-        base_url: env_or("CONTRACT_BASE_URL", "http://127.0.0.1:58080"),
+        base_url: env_or("CONTRACT_BASE_URL", "http://127.0.0.1:58081"),
         database_url: env_or(
             "CONTRACT_DATABASE_URL",
             "postgres://contract:contract@127.0.0.1:55432/past_exam_contract",
@@ -74,23 +65,14 @@ pub fn config() -> &'static Config {
         rate_limit_window: env_or("CONTRACT_RATE_LIMIT_WINDOW_SECONDS", "60")
             .parse()
             .unwrap(),
-        target: match env_or("CONTRACT_TARGET", "reference").as_str() {
-            "rust" => Target::Rust,
-            _ => Target::Reference,
-        },
     })
 }
 
-/// Return early from a test that only applies to the Rust rewrite (a deliberate
-/// fix listed in 07-deviations.md).
+/// Kept so the deliberate-fix tests read the same as before. Every test in this
+/// repository targets the Rust implementation.
 #[macro_export]
 macro_rules! rust_only {
-    () => {
-        if $crate::config().target != $crate::Target::Rust {
-            eprintln!("skipped: deliberate fix, only checked with CONTRACT_TARGET=rust");
-            return;
-        }
-    };
+    () => {};
 }
 
 // ---------------------------------------------------------------------------
@@ -98,7 +80,10 @@ macro_rules! rust_only {
 // ---------------------------------------------------------------------------
 
 pub fn uid(prefix: &str) -> String {
-    format!("{prefix}-{}", &uuid::Uuid::new_v4().simple().to_string()[..16])
+    format!(
+        "{prefix}-{}",
+        &uuid::Uuid::new_v4().simple().to_string()[..16]
+    )
 }
 
 pub fn now() -> i64 {
@@ -138,14 +123,24 @@ pub fn ts_z_re() -> &'static Regex {
 
 #[track_caller]
 pub fn assert_ts_offset(value: &Value) {
-    let s = value.as_str().unwrap_or_else(|| panic!("expected timestamp string, got {value}"));
-    assert!(ts_offset_re().is_match(s), "expected isoformat '+00:00' timestamp, got {s}");
+    let s = value
+        .as_str()
+        .unwrap_or_else(|| panic!("expected timestamp string, got {value}"));
+    assert!(
+        ts_offset_re().is_match(s),
+        "expected isoformat '+00:00' timestamp, got {s}"
+    );
 }
 
 #[track_caller]
 pub fn assert_ts_z(value: &Value) {
-    let s = value.as_str().unwrap_or_else(|| panic!("expected timestamp string, got {value}"));
-    assert!(ts_z_re().is_match(s), "expected pydantic 'Z' timestamp, got {s}");
+    let s = value
+        .as_str()
+        .unwrap_or_else(|| panic!("expected timestamp string, got {value}"));
+    assert!(
+        ts_z_re().is_match(s),
+        "expected pydantic 'Z' timestamp, got {s}"
+    );
 }
 
 /// Assert that a JSON object has exactly the given keys.
@@ -687,7 +682,10 @@ impl Ctx {
             .origin(&config().allowed_origin)
             .form(&[
                 ("username", &user.username),
-                ("password", user.password.as_deref().expect("user has a password")),
+                (
+                    "password",
+                    user.password.as_deref().expect("user has a password"),
+                ),
             ])
             .send()
             .await;
@@ -713,12 +711,20 @@ impl Ctx {
 
     pub async fn redis_get(&self, key: &str) -> Option<String> {
         let mut con = self.redis.clone();
-        redis::cmd("GET").arg(key).query_async(&mut con).await.unwrap()
+        redis::cmd("GET")
+            .arg(key)
+            .query_async(&mut con)
+            .await
+            .unwrap()
     }
 
     pub async fn redis_ttl(&self, key: &str) -> i64 {
         let mut con = self.redis.clone();
-        redis::cmd("TTL").arg(key).query_async(&mut con).await.unwrap()
+        redis::cmd("TTL")
+            .arg(key)
+            .query_async(&mut con)
+            .await
+            .unwrap()
     }
 
     pub async fn redis_set(&self, key: &str, value: &str, ttl: u64) {
@@ -738,10 +744,7 @@ impl Ctx {
     pub async fn create_user(&self, new: NewUser) -> User {
         let id = uuid::Uuid::new_v4().to_string();
         let username = new.username.clone().unwrap_or_else(|| uid("user"));
-        let hashed = new
-            .password
-            .as_ref()
-            .map(|p| bcrypt::hash(p, 4).unwrap());
+        let hashed = new.password.as_ref().map(|p| bcrypt::hash(p, 4).unwrap());
         self.db
             .execute(
                 "INSERT INTO users (id, username, readable_name, email, school_department, note, \
@@ -977,8 +980,16 @@ impl Ctx {
 
     // -- generic queries ---------------------------------------------------
 
-    pub async fn scalar_i64(&self, sql: &str, params: &[&(dyn tokio_postgres::types::ToSql + Sync)]) -> i64 {
-        self.db.query_one(sql, params).await.unwrap().get::<_, i64>(0)
+    pub async fn scalar_i64(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> i64 {
+        self.db
+            .query_one(sql, params)
+            .await
+            .unwrap()
+            .get::<_, i64>(0)
     }
 
     pub async fn row(

@@ -16,15 +16,28 @@ async fn list_includes_private_departments_sorted_by_sort_order() {
     let all = ids(&body);
     let pos = |id: &str| all.iter().position(|v| v == id).expect("listed");
     assert!(pos(&early.id) < pos(&late.id));
-    let item = body.as_array().unwrap().iter().find(|d| d["id"] == json!(early.id)).unwrap();
+    let item = body
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|d| d["id"] == json!(early.id))
+        .unwrap();
     assert_keys(item, DEPARTMENT_KEYS);
     assert_eq!(item["is_public"], json!(false));
     assert_eq!(item["sort_order"], json!(3));
     assert_eq!(item["name"], json!(early.name));
     assert_ts_offset(&item["create_time"]);
 
-    let sort_orders: Vec<i64> = body.as_array().unwrap().iter().map(|d| d["sort_order"].as_i64().unwrap()).collect();
-    assert!(sort_orders.windows(2).all(|w| w[0] <= w[1]), "sorted by sort_order");
+    let sort_orders: Vec<i64> = body
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["sort_order"].as_i64().unwrap())
+        .collect();
+    assert!(
+        sort_orders.windows(2).all(|w| w[0] <= w[1]),
+        "sorted by sort_order"
+    );
 }
 
 #[tokio::test]
@@ -32,7 +45,11 @@ async fn single_department_is_readable_by_any_authenticated_user() {
     let ctx = Ctx::new().await;
     let user = ctx.user().await;
     let private = ctx.department(false).await;
-    let resp = ctx.get(&format!("/departments/{}", private.id)).auth(&user).send().await;
+    let resp = ctx
+        .get(&format!("/departments/{}", private.id))
+        .auth(&user)
+        .send()
+        .await;
     resp.expect(200);
     assert_keys(&resp.json(), DEPARTMENT_KEYS);
     ctx.get("/departments/no-such-department")
@@ -40,7 +57,10 @@ async fn single_department_is_readable_by_any_authenticated_user() {
         .send()
         .await
         .expect_detail(404, "Not Found");
-    ctx.get(&format!("/departments/{}", private.id)).send().await.expect(401);
+    ctx.get(&format!("/departments/{}", private.id))
+        .send()
+        .await
+        .expect(401);
 }
 
 #[tokio::test]
@@ -67,7 +87,12 @@ async fn visible_departments() {
     assert_keys(&body[0], DEPARTMENT_KEYS);
 
     let admin = ctx.super_user().await;
-    let all = ids(&ctx.get("/departments/visible").auth(&admin).send().await.json());
+    let all = ids(&ctx
+        .get("/departments/visible")
+        .auth(&admin)
+        .send()
+        .await
+        .json());
     assert!(all.contains(&hidden.id));
 }
 
@@ -92,7 +117,12 @@ async fn status_lists_visible_and_pending() {
     assert_keys(&body["pending"][0], DEPARTMENT_KEYS);
 
     let admin = ctx.super_user().await;
-    let body = ctx.get("/departments/status").auth(&admin).send().await.json();
+    let body = ctx
+        .get("/departments/status")
+        .auth(&admin)
+        .send()
+        .await
+        .json();
     assert!(ids(&body["visible"]).contains(&pending.id));
     assert_eq!(body["pending"], json!([]));
 }
@@ -109,14 +139,27 @@ async fn visible_check_only_counts_approved_membership() {
     let check = |u: User, d: Dept| {
         let ctx = &ctx;
         async move {
-            let resp = ctx.get(&format!("/departments/{}/visible-check", d.id)).auth(&u).send().await;
+            let resp = ctx
+                .get(&format!("/departments/{}/visible-check", d.id))
+                .auth(&u)
+                .send()
+                .await;
             resp.expect(200);
             resp.json()
         }
     };
-    assert_eq!(check(user.clone(), approved.clone()).await, json!({"can_view": true}));
-    assert_eq!(check(user.clone(), public.clone()).await, json!({"can_view": false}));
-    assert_eq!(check(admin.clone(), approved.clone()).await, json!({"can_view": false}));
+    assert_eq!(
+        check(user.clone(), approved.clone()).await,
+        json!({"can_view": true})
+    );
+    assert_eq!(
+        check(user.clone(), public.clone()).await,
+        json!({"can_view": false})
+    );
+    assert_eq!(
+        check(admin.clone(), approved.clone()).await,
+        json!({"can_view": false})
+    );
 }
 
 #[tokio::test]
@@ -129,10 +172,20 @@ async fn admin_check_requires_approved_admin_membership() {
     ctx.admin_of(&user, &dept).await;
     ctx.membership(&user, &pending_dept, "PENDING", true).await;
 
-    let check = |u: &User, d: &Dept| ctx.get(&format!("/departments/{}/admin-check", d.id)).auth(u).send();
+    let check = |u: &User, d: &Dept| {
+        ctx.get(&format!("/departments/{}/admin-check", d.id))
+            .auth(u)
+            .send()
+    };
     assert_eq!(check(&user, &dept).await.json(), json!({"is_admin": true}));
-    assert_eq!(check(&user, &pending_dept).await.json(), json!({"is_admin": false}));
-    assert_eq!(check(&admin, &dept).await.json(), json!({"is_admin": false}));
+    assert_eq!(
+        check(&user, &pending_dept).await.json(),
+        json!({"is_admin": false})
+    );
+    assert_eq!(
+        check(&admin, &dept).await.json(),
+        json!({"is_admin": false})
+    );
 }
 
 #[tokio::test]
@@ -146,7 +199,11 @@ async fn department_courses_with_has_posts() {
     ctx.seed_post(&with_approved, &user, "APPROVED").await;
     ctx.seed_post(&with_pending, &user, "PENDING").await;
 
-    let resp = ctx.get(&format!("/departments/{}/courses", dept.id)).auth(&user).send().await;
+    let resp = ctx
+        .get(&format!("/departments/{}/courses", dept.id))
+        .auth(&user)
+        .send()
+        .await;
     resp.expect(200);
     let body = resp.json();
     let courses = body.as_array().unwrap();
@@ -173,8 +230,22 @@ async fn department_courses_and_bulletins_hide_private_departments() {
 
     for suffix in ["courses", "bulletins"] {
         let path = format!("/departments/{}/{suffix}", private.id);
-        ctx.get(&path).auth(&outsider).send().await.expect_detail(404, "Department not found");
-        assert_eq!(ctx.get(&path).auth(&member).send().await.json().as_array().unwrap().len(), 1);
+        ctx.get(&path)
+            .auth(&outsider)
+            .send()
+            .await
+            .expect_detail(404, "Department not found");
+        assert_eq!(
+            ctx.get(&path)
+                .auth(&member)
+                .send()
+                .await
+                .json()
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
         ctx.get(&path).auth(&admin).send().await.expect(200);
         ctx.get(&format!("/departments/no-such-dept/{suffix}"))
             .auth(&member)
@@ -190,7 +261,12 @@ async fn department_bulletins_shape() {
     let user = ctx.user().await;
     let dept = ctx.department(true).await;
     let bulletin = ctx.bulletin(&dept).await;
-    let body = ctx.get(&format!("/departments/{}/bulletins", dept.id)).auth(&user).send().await.json();
+    let body = ctx
+        .get(&format!("/departments/{}/bulletins", dept.id))
+        .auth(&user)
+        .send()
+        .await
+        .json();
     assert_eq!(ids(&body), vec![bulletin]);
     assert_keys(&body[0], BULLETIN_KEYS);
 }
@@ -212,7 +288,11 @@ async fn send_join_request() {
     assert_eq!(body["is_department_admin"], json!(false));
     assert_ts_offset(&body["create_time"]);
 
-    ctx.post(&path).auth(&user).send().await.expect_detail(400, "duplicate request");
+    ctx.post(&path)
+        .auth(&user)
+        .send()
+        .await
+        .expect_detail(400, "duplicate request");
     assert_eq!(
         ctx.scalar_i64(
             "SELECT count(*) FROM users_departments WHERE user_id = $1 AND department_id = $2",
@@ -287,15 +367,26 @@ async fn join_request_listing_for_admins() {
             "note": "please",
         }])
     );
-    ctx.get(&path).auth(&other_admin).send().await.expect_detail(403, "Forbidden");
-    ctx.get(&path).auth(&member).send().await.expect_detail(403, "Forbidden");
+    ctx.get(&path)
+        .auth(&other_admin)
+        .send()
+        .await
+        .expect_detail(403, "Forbidden");
+    ctx.get(&path)
+        .auth(&member)
+        .send()
+        .await
+        .expect_detail(403, "Forbidden");
 }
 
 #[tokio::test]
 async fn member_listing_for_admins() {
     let ctx = Ctx::new().await;
     let admin = ctx
-        .create_user(NewUser { readable_name: Some("Admin".into()), ..Default::default() })
+        .create_user(NewUser {
+            readable_name: Some("Admin".into()),
+            ..Default::default()
+        })
         .await;
     let member = ctx
         .create_user(NewUser {
@@ -311,7 +402,11 @@ async fn member_listing_for_admins() {
     ctx.member(&member, &dept).await;
     ctx.membership(&applicant, &dept, "PENDING", false).await;
 
-    let resp = ctx.get(&format!("/departments/{}/members", dept.id)).auth(&admin).send().await;
+    let resp = ctx
+        .get(&format!("/departments/{}/members", dept.id))
+        .auth(&admin)
+        .send()
+        .await;
     resp.expect(200);
     let body = resp.json();
     let mut members: Vec<_> = body.as_array().unwrap().clone();
@@ -337,7 +432,12 @@ async fn set_member_admin_flag() {
     let membership = ctx.member(&member, &dept).await;
     let path = format!("/departments/{}/admin", dept.id);
 
-    let resp = ctx.put(&path).auth(&admin).form(&[("user_id", &member.id), ("is_admin", "true")]).send().await;
+    let resp = ctx
+        .put(&path)
+        .auth(&admin)
+        .form(&[("user_id", &member.id), ("is_admin", "true")])
+        .send()
+        .await;
     resp.expect(200);
     assert_eq!(resp.json(), json!({"status": "success"}));
     let row = ctx
@@ -347,11 +447,20 @@ async fn set_member_admin_flag() {
     assert!(row.get::<_, bool>(0));
     assert!(row.get::<_, bool>(1), "updated_time is set");
     assert_eq!(
-        ctx.get(&format!("/departments/{}/admin-check", dept.id)).auth(&member).send().await.json(),
+        ctx.get(&format!("/departments/{}/admin-check", dept.id))
+            .auth(&member)
+            .send()
+            .await
+            .json(),
         json!({"is_admin": true})
     );
 
-    ctx.put(&path).auth(&admin).form(&[("user_id", &member.id), ("is_admin", "false")]).send().await.expect(200);
+    ctx.put(&path)
+        .auth(&admin)
+        .form(&[("user_id", &member.id), ("is_admin", "false")])
+        .send()
+        .await
+        .expect(200);
     ctx.get(&format!("/departments/{}/members", dept.id))
         .auth(&member)
         .send()
@@ -373,7 +482,10 @@ async fn unchanged_admin_flag_does_not_touch_updated_time() {
         .await
         .expect(200);
     let touched: bool = ctx
-        .row("SELECT updated_time IS NOT NULL FROM users_departments WHERE id = $1", &[&membership])
+        .row(
+            "SELECT updated_time IS NOT NULL FROM users_departments WHERE id = $1",
+            &[&membership],
+        )
         .await
         .unwrap()
         .get(0);
@@ -419,7 +531,10 @@ async fn set_member_admin_errors() {
         .await
         .expect(200);
     let row = ctx
-        .row("SELECT is_department_admin, status FROM users_departments WHERE id = $1", &[&pending_membership])
+        .row(
+            "SELECT is_department_admin, status FROM users_departments WHERE id = $1",
+            &[&pending_membership],
+        )
         .await
         .unwrap();
     assert!(row.get::<_, bool>(0));
@@ -437,9 +552,20 @@ async fn approve_join_request() {
     let request_id = ctx.membership(&applicant, &dept, "PENDING", false).await;
 
     // Warm the applicant's caches while still pending.
-    assert!(!ids(&ctx.get("/departments/visible").auth(&applicant).send().await.json()).contains(&dept.id));
+    assert!(!ids(&ctx
+        .get("/departments/visible")
+        .auth(&applicant)
+        .send()
+        .await
+        .json())
+    .contains(&dept.id));
     assert_eq!(
-        ids(&ctx.get("/departments/status").auth(&applicant).send().await.json()["pending"]),
+        ids(&ctx
+            .get("/departments/status")
+            .auth(&applicant)
+            .send()
+            .await
+            .json()["pending"]),
         vec![dept.id.clone()]
     );
     ctx.get(&format!("/departments/{}/courses", dept.id))
@@ -448,20 +574,37 @@ async fn approve_join_request() {
         .await
         .expect(404);
 
-    let path = format!("/departments/join-request/{}/approve/{}", dept.id, request_id);
+    let path = format!(
+        "/departments/join-request/{}/approve/{}",
+        dept.id, request_id
+    );
     let resp = ctx.put(&path).auth(&admin).send().await;
     resp.expect(200);
     assert_eq!(resp.json(), json!({"status": "success"}));
     let row = ctx
-        .row("SELECT status, updated_time IS NOT NULL FROM users_departments WHERE id = $1", &[&request_id])
+        .row(
+            "SELECT status, updated_time IS NOT NULL FROM users_departments WHERE id = $1",
+            &[&request_id],
+        )
         .await
         .unwrap();
     assert_eq!(row.get::<_, String>(0), "APPROVED");
     assert!(row.get::<_, bool>(1));
 
     // Caches are invalidated: the new membership is visible immediately.
-    assert!(ids(&ctx.get("/departments/visible").auth(&applicant).send().await.json()).contains(&dept.id));
-    let status = ctx.get("/departments/status").auth(&applicant).send().await.json();
+    assert!(ids(&ctx
+        .get("/departments/visible")
+        .auth(&applicant)
+        .send()
+        .await
+        .json())
+    .contains(&dept.id));
+    let status = ctx
+        .get("/departments/status")
+        .auth(&applicant)
+        .send()
+        .await
+        .json();
     assert_eq!(status["pending"], json!([]));
     assert!(ids(&status["visible"]).contains(&dept.id));
     ctx.get(&format!("/departments/{}/courses", dept.id))
@@ -469,9 +612,19 @@ async fn approve_join_request() {
         .send()
         .await
         .expect(200);
-    assert!(ids(&ctx.get("/verify-token").auth(&applicant).send().await.json()["visible_departments"]).contains(&dept.id));
+    assert!(ids(&ctx
+        .get("/verify-token")
+        .auth(&applicant)
+        .send()
+        .await
+        .json()["visible_departments"])
+    .contains(&dept.id));
 
-    ctx.put(&path).auth(&admin).send().await.expect_detail(400, "request is not pending");
+    ctx.put(&path)
+        .auth(&admin)
+        .send()
+        .await
+        .expect_detail(400, "request is not pending");
 }
 
 #[tokio::test]
@@ -484,18 +637,27 @@ async fn approval_is_bound_to_the_authorized_department() {
     ctx.admin_of(&admin, &mine).await;
     let foreign_request = ctx.membership(&applicant, &theirs, "PENDING", false).await;
 
-    ctx.put(&format!("/departments/join-request/{}/approve/{}", mine.id, foreign_request))
-        .auth(&admin)
-        .send()
-        .await
-        .expect_detail(404, "Not Found");
-    ctx.put(&format!("/departments/join-request/{}/approve/{}", theirs.id, foreign_request))
-        .auth(&admin)
-        .send()
-        .await
-        .expect_detail(403, "Forbidden");
+    ctx.put(&format!(
+        "/departments/join-request/{}/approve/{}",
+        mine.id, foreign_request
+    ))
+    .auth(&admin)
+    .send()
+    .await
+    .expect_detail(404, "Not Found");
+    ctx.put(&format!(
+        "/departments/join-request/{}/approve/{}",
+        theirs.id, foreign_request
+    ))
+    .auth(&admin)
+    .send()
+    .await
+    .expect_detail(403, "Forbidden");
     let status: String = ctx
-        .row("SELECT status FROM users_departments WHERE id = $1", &[&foreign_request])
+        .row(
+            "SELECT status FROM users_departments WHERE id = $1",
+            &[&foreign_request],
+        )
         .await
         .unwrap()
         .get(0);
@@ -507,10 +669,26 @@ async fn join_request_send_refreshes_status_cache() {
     let ctx = Ctx::new().await;
     let user = ctx.user().await;
     let dept = ctx.department(false).await;
-    assert_eq!(ctx.get("/departments/status").auth(&user).send().await.json()["pending"], json!([]));
-    ctx.post(&format!("/departments/{}/join-request/send", dept.id)).auth(&user).send().await.expect(200);
     assert_eq!(
-        ids(&ctx.get("/departments/status").auth(&user).send().await.json()["pending"]),
+        ctx.get("/departments/status")
+            .auth(&user)
+            .send()
+            .await
+            .json()["pending"],
+        json!([])
+    );
+    ctx.post(&format!("/departments/{}/join-request/send", dept.id))
+        .auth(&user)
+        .send()
+        .await
+        .expect(200);
+    assert_eq!(
+        ids(&ctx
+            .get("/departments/status")
+            .auth(&user)
+            .send()
+            .await
+            .json()["pending"]),
         vec![dept.id]
     );
 }
