@@ -304,7 +304,7 @@ pub fn query_map(uri: &Uri) -> HashMap<String, String> {
     query_pairs(uri).into_iter().collect()
 }
 
-/// pydantic v2 lax integer parsing (see contract-tests/vectors/parsing.json).
+/// pydantic v2 lax integer parsing (see testdata/vectors/parsing.json).
 pub fn parse_int_lax(raw: &str) -> Option<i64> {
     let bytes = raw.as_bytes();
     if bytes.is_empty() {

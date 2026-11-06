@@ -1,5 +1,5 @@
 //! Vector-driven unit tests. Every expected value comes from
-//! `contract-tests/vectors/*.json`, captured from the legacy backend.
+//! `testdata/vectors/*.json`, captured from the legacy backend.
 
 use std::fs;
 
@@ -18,11 +18,7 @@ use crate::routes::auth::school_id_from_email;
 use crate::routes::threads::valid_image_magic;
 
 fn vector(name: &str) -> Value {
-    let path = format!(
-        "{}/../contract-tests/vectors/{}",
-        env!("CARGO_MANIFEST_DIR"),
-        name
-    );
+    let path = format!("{}/testdata/vectors/{}", env!("CARGO_MANIFEST_DIR"), name);
     serde_json::from_str(
         &fs::read_to_string(&path).unwrap_or_else(|error| panic!("read {path}: {error}")),
     )
@@ -30,11 +26,7 @@ fn vector(name: &str) -> Value {
 }
 
 fn fixture(name: &str) -> String {
-    let path = format!(
-        "{}/../contract-tests/fixtures/{}",
-        env!("CARGO_MANIFEST_DIR"),
-        name
-    );
+    let path = format!("{}/testdata/fixtures/{}", env!("CARGO_MANIFEST_DIR"), name);
     fs::read_to_string(&path).unwrap_or_else(|error| panic!("read {path}: {error}"))
 }
 

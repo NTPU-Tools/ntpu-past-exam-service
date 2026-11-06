@@ -3,6 +3,5 @@
 .idea
 .vscode
 
-# Rust contract test build output
-contract-tests/target/
-rust/target/
+# Rust build output
+target/

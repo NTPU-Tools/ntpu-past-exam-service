@@ -16,7 +16,7 @@ x-database: &database
 services:
   migrate:
     build:
-      context: ./rust
+      context: .
       dockerfile: Dockerfile
     command: ["migrate"]
     environment:
@@ -27,7 +27,7 @@ services:
 
   api:
     build:
-      context: ./rust
+      context: .
       dockerfile: Dockerfile
       args:
         SOURCE_COMMIT: ${SOURCE_COMMIT:-unknown}
