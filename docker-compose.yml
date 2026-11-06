@@ -18,7 +18,7 @@ services:
     build:
       context: ./rust
       dockerfile: Dockerfile
-    command: ["/usr/local/bin/past-exam-service", "migrate"]
+    command: ["migrate"]
     environment:
       <<: *database
     networks:

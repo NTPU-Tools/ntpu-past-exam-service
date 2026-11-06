@@ -33,4 +33,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
     CMD ["/usr/local/bin/past-exam-service", "healthcheck"]
 
-ENTRYPOINT ["/usr/local/bin/past-exam-service", "serve"]
+ENTRYPOINT ["/usr/local/bin/past-exam-service"]
+CMD ["serve"]
