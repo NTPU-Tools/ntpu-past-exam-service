@@ -3,8 +3,8 @@
 #   docker compose --env-file .env up -d --build
 #
 # The services join the external network named by BACKEND_NETWORK (default:
-# backend); create it first if it does not exist. Set AUTH_COOKIE_SECURE=true
-# when serving over HTTPS.
+# backend); create it first if it does not exist. Set AUTH_COOKIE_SECURE=false
+# only for plain-HTTP local development.
 
 x-database: &database
   DATABASE_HOST: ${DATABASE_HOST}
@@ -48,7 +48,7 @@ services:
       R2_FILE_PATH: ${R2_FILE_PATH}
       HASH_KEY: ${HASH_KEY}
       ORIGIN: ${ORIGIN:-}
-      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
       AWS_EMAIL_SENDER: ${AWS_EMAIL_SENDER:-}
       AWS_ACCESS_KEY: ${AWS_ACCESS_KEY:-}
       AWS_ACCESS_SECRET: ${AWS_ACCESS_SECRET:-}
