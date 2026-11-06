@@ -15,7 +15,7 @@ alembic upgrade head                          # Run all migrations
 alembic revision --autogenerate -m "message"  # Generate new migration
 ```
 
-Uses **Poetry** for dependency management. `requirements.txt` is an export for Vercel deployment (`scripts/export_requirements.sh`).
+Uses **Poetry** for dependency management. `requirements.txt` is an export (`scripts/export_requirements.sh`).
 
 ### Code Quality
 
@@ -36,7 +36,6 @@ Pre-commit hooks configured in `.pre-commit-config.yaml`.
 - **Cloudflare R2** (S3-compatible via boto3) for file storage
 - **JWT** auth (HS256, python-jose)
 - **Logtail** for structured logging (Better Stack)
-- Deployed on **Vercel** (Python runtime, configured in `vercel.json`)
 
 ## Architecture
 
